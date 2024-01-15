@@ -1,0 +1,74 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config-homework
+  namespace: homework
+data:
+  homework.conf: |
+    server {
+        listen 8000;
+        server_name localhost;
+
+        location / {
+          root /homework;
+          index index.html;
+        }
+
+        location ~ /\.ht {
+          deny all;
+        }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+  labels:
+    component: homework
+    app: nginx
+  namespace: homework
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    env:
+    - name: NGINX_PORT
+      value: "8000"
+    command: [nginx-debug, '-g', 'daemon off;']
+    ports:
+    - containerPort: 8000
+    volumeMounts:
+    - name: homework-volume
+      mountPath: /homework
+    - name: nginx-config-volume
+      mountPath: /etc/nginx/conf.d/homework.conf
+      subPath: homework.conf
+    resources:
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+    workingDir: /homework
+    lifecycle:
+      preStop:
+        exec:
+          command: ["/bin/sh", "-c", "rm -fv /homework/index.html"]
+  initContainers:
+  - name: install
+    image: busybox:1.28
+    volumeMounts:
+    - name: homework-volume
+      mountPath: "/init"
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      cat << EOF > /init/index.html
+      <!DOCTYPE html><html lang="en"><head><title>Hello, World!</title></head><body><h1>Hello, World!</h1><h2>Today is $(date)</h2></body></html>
+      EOF
+  dnsPolicy: Default
+  volumes:
+  - name: homework-volume
+    emptyDir: {}
+  - name: nginx-config-volume
+    configMap:
+      name: nginx-config-homework
