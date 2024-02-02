@@ -2,9 +2,10 @@
 
 aasdhajkshd repository
 
-
 > <span style="color:red">INFO</span>
 <span style="color:blue">Информация на картинках, как IP адреса, порты или время, может отличаться от приводимой в тексте.</span>
+
+> [Шпаргалка по kubectl](https://kubernetes.io/ru/docs/reference/kubectl/cheatsheet/)
 
 ---
 
@@ -12,6 +13,123 @@ aasdhajkshd repository
 
 * [Знакомство с Kubernetes, основные понятия и архитектура](#kubernetes-intro)
 * [Управление жизненным циклом и взаимодействием pod в Kubernetes](#kubernetes-controllers)
+* [Сетевая подсистема и сущности Kubernetes](#kubernetes-networks)
+
+---
+
+## <a name="kubernetes-controllers">Сетевая подсистема и сущности Kubernetes</a>
+
+### ДЗ // Сетевое взаимодействие Pod, сервисы
+
+#### Выполнение
+
+1. Скопированы манифесты `kubernetes-networks/namespace.yaml`, `kubernetes-networks/configmap.yaml` и `kubernetes-networks/desployment.yaml`
+2. Внесены измения в манифест `deployment.yaml`, чтобы выполнялась проверка по **httpGet**, вызывающую URL /index.html (далее /homepage/index.html)
+3. Cоздан манифест `service.yaml`, который описывает сервис типа ClusterIP, который будет направляет трафик на поды *web*, управляемые *Deployment* сервисом
+4. Установлен в кластер *minikube* ingress-контроллер nginx
+
+> порты выбраны специально, чтобы наблюдать проходжение запроса
+
+```bash
+$ minikube start --nodes=4 
+# https://minikube.sigs.k8s.io/docs/tutorials/multi_node/ 
+# for i in 3; do minikube node add --delete-on-failure=true --worker=true; done
+
+$ kubectl label nodes --overwrite=true minikube-m02 minikube-m03 workload=production
+
+$ kubectl apply -f namespace.yaml -f configmap.yaml -f deployment.yaml -f service.yaml
+...
+service/ui configured
+
+$ kubectl -n homework describe service/ui
+Name:              ui
+Namespace:         homework
+Labels:            app=ui
+                   component=homework
+Annotations:       <none>
+Selector:          app=nginx,component=homework
+Type:              ClusterIP
+IP Family Policy:  SingleStack
+IP Families:       IPv4
+IP:                10.110.146.145
+IPs:               10.110.146.145
+Port:              <unset>  8888/TCP
+TargetPort:        8000/TCP
+Endpoints:         10.244.1.2:8000,10.244.1.3:8000,10.244.2.2:8000
+Session Affinity:  None
+Events:            <none>
+
+$ kubectl -n homework get svc
+NAME   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+ui     ClusterIP   10.110.146.145   <none>        8888/TCP   28m
+
+```
+
+Тестирование:
+
+```bash
+$ kubectl port-forward -n homework services/ui 8888:8888
+```
+
+![img](images/Screenshot_20240202_130355.png)
+
+5. Создан манифест `ingress.yaml`, в котором описывается описан объект типа ingress, направляющий все http запросы к хосту homework.otus на ранее созданный сервис.
+
+```bash
+$ minikube addons enable ingress
+💡  ingress is an addon maintained by Kubernetes. For any concerns contact minikube on GitHub.
+You can view the list of minikube maintainers at: https://github.com/kubernetes/minikube/blob/master/OWNERS
+    ▪ Using image registry.k8s.io/ingress-nginx/controller:v1.9.4
+    ▪ Using image registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20231011-8b53cabe0
+    ▪ Using image registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20231011-8b53cabe0
+🔎  Verifying ingress addon...
+🌟  The 'ingress' addon is enabled
+
+$ kubectl apply -f ingress.yaml
+ingress.networking.k8s.io/ui created
+
+$ kubectl -n homework get ingress
+NAME   CLASS   HOSTS           ADDRESS        PORTS   AGE
+ui     nginx   homework.otus   192.168.49.2   80      2m36s
+
+$ minikube tunnel
+Status:
+        machine: minikube
+        pid: 1200117
+        route: 10.96.0.0/12 -> 192.168.49.2
+        minikube: Running
+...
+```
+
+Проверка:
+
+```bash
+$ curl http://homework.otus/
+<!DOCTYPE html><html lang="en"><head><title>Hello, World!</title></head><body><h1>Hello, World!</h1><h2>Today is Fri Feb  2 19:31:59 UTC 2024 on web-f7ffc5798-jptjj</h2></body></html>
+```
+
+#### Задание со *
+
+Для выполнения задания со \*, где выполняется обращение к *http://homework.otus/index.html*, ingress перенаправляет на *http://homework.otus/homepage* внесены изменения в манифесты, так что запрашиваемая страница доступна по новому адресу service/ClusterIP *http://10.110.146.145:8888/homepage/*
+
+Для проверки при обращении к http://homework.otus/index.html выдается ошибка:
+
+![](images/Screenshot_20240203_011615.png)
+
+Ingress nginx вносит изменения и страница доступна:
+
+![](images/Screenshot_20240203_011445.png)
+
+где адрес *192.168.49.2 homework.otus* прописан локальнов в `/etc/hosts`
+
+```bash
+$ kubectl -n homework logs deployments/web -f
+Found 3 pods, using pod/web-78c87f6c87-fjbbh
+...
+10.244.0.5 - - [02/Feb/2024:22:10:40 +0000] "GET /homepage/ HTTP/1.1" 200 180 "-" "curl/8.5.0" "192.168.49.1"
+10.244.0.5 - - [02/Feb/2024:22:11:50 +0000] "GET /homepage/index.html HTTP/1.1" 200 180 "-" "curl/8.5.0" "192.168.49.1"
+10.244.0.5 - - [02/Feb/2024:22:12:04 +0000] "GET /homepage/index.html HTTP/1.1" 200 180 "-" "curl/8.5.0" "192.168.49.1"
+```
 
 ---
 
