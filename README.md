@@ -14,6 +14,145 @@ aasdhajkshd repository
 * [Знакомство с Kubernetes, основные понятия и архитектура](#kubernetes-intro)
 * [Управление жизненным циклом и взаимодействием pod в Kubernetes](#kubernetes-controllers)
 * [Сетевая подсистема и сущности Kubernetes](#kubernetes-networks)
+* [Хранение данных в Kubernetes: Volumes, Storages, Statefull-приложения](#kubernetes-volumes)
+
+---
+
+## <a name="kubernetes-volumes">Хранение данных в Kubernetes: Volumes, Storages, Statefull-приложения</a>
+
+### ДЗ // Volumes, StorageClass, PV, PVC
+
+#### Выполнение
+
+1. Активированы дополнительные [плагины](https://minikube.sigs.k8s.io/docs/tutorials/volume_snapshots_and_csi/) для minikube'а
+  
+```bash
+# minikube start --node=3 --network-plugin=cni --enable-default-cni --container-runtime=containerd --bootstrapper=kubeadm
+
+$ minikube addons enable volumesnapshots
+...
+  The 'volumesnapshots' addon is enabled
+
+$ minikube addons enable csi-hostpath-driver
+...
+  The 'csi-hostpath-driver' addon is enabled
+```
+
+1. Создан манифест `kubernetes-volumes/storageClass.yaml` с именем *homework-storage* с provisioner: *hostPath* и reclaimPolicy: *Retain*
+
+```bash
+$ kubectl apply -f storageClass.yaml
+storageclass.storage.k8s.io/homework-storage created
+
+$ kubectl get sc
+NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+csi-hostpath-sc      hostpath.csi.k8s.io        Delete          Immediate              false                  6m29s
+homework-storage     k8s.io/minikube-hostpath   Retain          WaitForFirstConsumer   true                   11s
+standard (default)   k8s.io/minikube-hostpath   Delete          Immediate              false                  17h
+
+$ kubectl describe storageClasses/homework-storage
+Name:            homework-storage
+IsDefaultClass:  No
+Annotations:     kubectl.kubernetes.io/last-applied-configuration={"allowVolumeExpansion":true,"apiVersion":"storage.k8s.io/v1","kind":"StorageClass","metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"},"labels":{"addonmanager.kubernetes.io/mode":"EnsureExists","name":"homework"},"name":"homework-storage"},"mountOptions":["discard"],"parameters":{"guaranteedReadWriteLatency":"true"},"provisioner":"k8s.io/minikube-hostpath","reclaimPolicy":"Retain","volumeBindingMode":"WaitForFirstConsumer"}
+,storageclass.kubernetes.io/is-default-class=false
+Provisioner:           k8s.io/minikube-hostpath
+Parameters:            guaranteedReadWriteLatency=true
+AllowVolumeExpansion:  True
+MountOptions:
+  discard
+ReclaimPolicy:      Retain
+VolumeBindingMode:  WaitForFirstConsumer
+Events:             <none>
+```
+
+2. Созданы манифесты `kubernetes-volumes/pvc.yaml` и `kubernetes-volumes/pv.yaml`, описывающие PersistentVolumeClaim, PersistentVolume с привязкой к `hostPath` в minikube'е, которые используют хранилище с storageClass из 1-го пункта
+
+```bash
+$ kubectl apply -f pv.yaml -f pvc.yaml
+
+$ kubectl -n homework get pvc,pv
+NAME                                 STATUS   VOLUME        CAPACITY   ACCESS MODES   STORAGECLASS       AGE
+persistentvolumeclaim/homework-pvc   Bound    homework-pv   200Mi      RWO            homework-storage   3h33m
+
+NAME                           CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                   STORAGECLASS       REASON   AGE
+persistentvolume/homework-pv   200Mi      RWO            Retain           Bound    homework/homework-pvc   homework-storage            3h33m
+```
+
+3. Создан манифест `kubernetes-volumes/cm.yaml` для объекта типа configMap с *nginx-config-file*, описывающий произвольный набор пар ключ-значение
+
+```bash
+$ kubectl -n homework get configmaps/nginx-config-file -o yaml
+```
+```yaml
+apiVersion: v1
+data:
+  file: property=value
+kind: ConfigMap
+...
+```
+
+4. В манифест `kubernetes-volumes/deployment.yaml` внесены изменения в спецификацию volume на pvc - *homework-pvc*
+
+```bash
+$ kubectl -n homework describe deployments.apps/web
+```
+```yaml
+    Mounts:
+...
+      /homework from homework-volume (rw)
+...
+  Volumes:
+   homework-volume:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  homework-pvc
+```
+
+#### Задание с *
+
+1. В манифесте `deployment.yaml` добавлено подключение configMap как volume к основному контейнеру пода в директорию /homework/conf, где можно обратиться к /conf/file
+
+```yaml
+    Mounts:
+...
+      /homework/conf/file from nginx-config-file (rw)
+  Volumes:
+...
+   nginx-config-file:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      nginx-config-file
+```
+
+```bash
+$ curl -I http://10.110.146.145:8888/conf/file
+HTTP/1.1 301 Moved Permanently
+Server: nginx/1.14.2
+Date: Sat, 03 Feb 2024 21:28:46 GMT
+Content-Type: text/html
+Content-Length: 185
+Location: http://10.110.146.145:8000/conf/file/
+Connection: keep-alive
+
+$ curl http://10.110.146.145:8888/conf/file/..data/file
+property=value
+
+```
+
+2. Внесены изменения в манифест `pvc.yaml` так, чтобы в нем запрашивалось хранилище созданного storageClass'а, см. пункт 2.
+
+Для Retain-политики выполнялась проверка с удалением *Deployment/web*, см. изображение ниже. Как видим, файл не удаляется. Здесь спецификация *preStop* с удалением файла index.html была "закомментирована"
+
+![](images/Screenshot_20240203_235647.png)
+
+#### Список документации:
+
+- [Установка Kubernetes с помощью Minikube](https://kubernetes.io/ru/docs/setup/learning-environment/minikube/)
+- [Volumes](https://kubernetes.io/docs/concepts/storage/volumes/)
+- [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+- [Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/)
+- [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
+- [Configure a Pod to Use a ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/)
+- [Learning Kubernetes: persistent storage with Minikube](https://martincarstenbach.wordpress.com/2019/06/07/learning-kubernetes-persistent-storage-with-minikube/)
+- [Configure a Pod to Use a PersistentVolume for Storage](https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/)
 
 ---
 
