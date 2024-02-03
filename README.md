@@ -17,7 +17,7 @@ aasdhajkshd repository
 
 ---
 
-## <a name="kubernetes-controllers">Сетевая подсистема и сущности Kubernetes</a>
+## <a name="kubernetes-networks">Сетевая подсистема и сущности Kubernetes</a>
 
 ### ДЗ // Сетевое взаимодействие Pod, сервисы
 
