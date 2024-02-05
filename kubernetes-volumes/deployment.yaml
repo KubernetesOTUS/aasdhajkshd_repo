@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    component: homework
+    app: nginx
+  namespace: homework
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      component: homework
+      app: nginx
+  template:
+    metadata:
+      labels:
+        component: homework
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        env:
+        - name: _NGINX_PORT
+          value: "8000"
+        - name: NGINX_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nginx-config-env
+              key: http_port
+        command: [nginx-debug, '-g', 'daemon off;']
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: homework-volume
+          mountPath: /homework
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/conf.d/homework.conf
+          subPath: homework.conf
+        - name: nginx-config-file
+          mountPath: /homework/conf/file
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        workingDir: /homework
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "echo rm -fv /homework/homepage/index.html"]
+          postStart:
+            exec: 
+              command: ["/bin/sh", "-c", "echo start"]
+        readinessProbe:
+          httpGet:
+            path: /homepage/index.html
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 360
+      nodeSelector:
+        workload: staging
+      initContainers:
+      - name: install
+        image: busybox:1.28
+        volumeMounts:
+        - name: homework-volume
+          mountPath: "/init"
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /init/homepage;
+          [[ -f /init/homepage/index.html ]] || \
+          cat << EOF > /init/homepage/index.html
+          <!DOCTYPE html><html lang="en"><head><title>Homepage</title></head><body><h1>Hello, World!</h1><h2>Today is $(date) on $(hostname -s)</h2></body></html>
+          EOF
+      dnsPolicy: Default
+      volumes:
+      - name: homework-volume
+        persistentVolumeClaim:
+          claimName: homework-pvc
+      - name: nginx-config-file
+        configMap:
+          name: nginx-config-file
+      - name: nginx-config-volume
+        configMap:
+          name: nginx-config-homework
