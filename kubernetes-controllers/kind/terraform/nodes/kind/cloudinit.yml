@@ -223,6 +223,7 @@ write_files:
               node-labels: "workload=production"
       - role: worker
       - role: worker
+      - role: worker
       networking:
         podSubnet: "10.244.0.0/16"
         serviceSubnet: "10.96.0.0/12"
