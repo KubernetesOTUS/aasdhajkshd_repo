@@ -1,0 +1,78 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    component: homework
+    app: nginx
+  namespace: homework
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      component: homework
+      app: nginx
+  template:
+    metadata:
+      labels:
+        component: homework
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        env:
+        - name: NGINX_PORT
+          value: "8000"
+        command: [nginx-debug, '-g', 'daemon off;']
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: homework-volume
+          mountPath: /homework
+        - name: nginx-config-volume
+          mountPath: /etc/nginx/conf.d/homework.conf
+          subPath: homework.conf
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        workingDir: /homework
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "rm -fv /homework/homepage/index.html"]
+        readinessProbe:
+          httpGet:
+            path: /homepage/index.html
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 360
+      nodeSelector:
+        workload: production
+      initContainers:
+      - name: install
+        image: busybox:1.28
+        volumeMounts:
+        - name: homework-volume
+          mountPath: "/init"
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mkdir -p /init/homepage;
+          cat << EOF > /init/homepage/index.html
+          <!DOCTYPE html><html lang="en"><head><title>Homepage</title></head><body><h1>Hello, World!</h1><h2>Today is $(date) on $(hostname -s)</h2></body></html>
+          EOF
+      dnsPolicy: Default
+      volumes:
+      - name: homework-volume
+        emptyDir: {}
+      - name: nginx-config-volume
+        configMap:
+          name: nginx-config-homework

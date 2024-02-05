@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  labels:
+    component: homework
+    app: ui
+  namespace: homework
+spec:
+  type: ClusterIP
+  # externalTrafficPolicy: Cluster
+  ports:
+  - port: 8888
+    # nodePort: 30294
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: nginx
+    component: homework
