@@ -53,6 +53,8 @@ spec:
       preStop:
         exec:
           command: ["/bin/sh", "-c", "rm -fv /homework/index.html"]
+  nodeSelector:
+    workload: staging
   initContainers:
   - name: install
     image: busybox:1.28
