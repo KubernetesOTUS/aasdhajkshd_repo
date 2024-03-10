@@ -133,12 +133,12 @@ Error from server (Forbidden): deployments.apps is forbidden: User "system:servi
 
 #### Список документации:
 
-[JSON Web Tokens](https://jwt.io)
-[Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
-[Organizing Cluster Access Using kubeconfig Files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig)
-[Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac)
-[Determine the Request Verb](https://kubernetes.io/docs/reference/access-authn-authz/authorization/#determine-the-request-verb)
-[Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account)
+- [JSON Web Tokens](https://jwt.io)
+- [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+- [Organizing Cluster Access Using kubeconfig Files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig)
+- [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac)
+- [Determine the Request Verb](https://kubernetes.io/docs/reference/access-authn-authz/authorization/#determine-the-request-verb)
+- [Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account)
 
 ---
 
