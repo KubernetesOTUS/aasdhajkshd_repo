@@ -1,0 +1,97 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homework
+  labels:
+    name: homework
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    kubernetes.io/enforce-mountable-secrets: "true"
+  name: consoler
+  namespace: homework
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: consoler
+  namespace: homework
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployments-web-patch
+  namespace: homework
+rules:
+  - apiGroups: [""]
+    resources: 
+      - pods
+      - endpoints
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["web"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: consoler-deployments-web-patch
+  namespace: homework
+subjects:
+- kind: ServiceAccount
+  name: consoler
+  namespace: homework
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployments-web-patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: consoler-monitoring
+subjects:
+- kind: ServiceAccount
+  name: consoler
+  namespace: homework
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:monitoring
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: console
+  labels:
+    component: homework
+    app: console
+  namespace: homework
+spec:
+  serviceAccountName: consoler
+  containers:
+  - name: console
+    image: alpine:latest
+    imagePullPolicy: IfNotPresent
+    command:
+      - /bin/sh
+      - "-c"
+      - "sleep 60m"
+    lifecycle:
+      postStart:
+        exec:
+          command: ["sh", "-c", "apk update && apk add bash curl wget jq kubectl helm inetutils-telnet rsync ansible ansible-lint yamllint golangci-lint gitlint jq yq openssl"]
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "1000m"
+  restartPolicy: Always
+  dnsPolicy: Default
+  dnsConfig:
+    nameservers:
+      - "8.8.8.8"
