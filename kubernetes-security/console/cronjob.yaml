@@ -1,0 +1,26 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: metrics
+  namespace: homework
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: monitoring
+          containers:
+          - name: curl-job
+            image: curlimages/curl:8.6.0
+            imagePullPolicy: IfNotPresent
+            command: ["sh", "-c", "curl -v -k -o /homework/metrics.txt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://minikube:8443/metrics"]
+            volumeMounts:
+            - name: homework-volume
+              mountPath: /homework
+          restartPolicy: Never
+          volumes:
+            - name: homework-volume
+              emptyDir: {}
