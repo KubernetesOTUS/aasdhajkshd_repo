@@ -15,6 +15,130 @@ aasdhajkshd repository
 * [Управление жизненным циклом и взаимодействием pod в Kubernetes](#kubernetes-controllers)
 * [Сетевая подсистема и сущности Kubernetes](#kubernetes-networks)
 * [Хранение данных в Kubernetes: Volumes, Storages, Statefull-приложения](#kubernetes-volumes)
+* [Основы безопасности в Kubernetes](#kubernetes-security)
+
+## <a name="kubernetes-security">Основы безопасности в Kubernetes</a>
+
+## ДЗ // Настройка сервисных аккаунтов и ограничение прав для них
+
+#### Выполнение
+
+1. Манифесты в папке `web`
+
+```bash
+for i in metrics-server dashboard volumesnapshots; do minikube addons enable $i; done
+kubectl label nodes --overwrite=true minikube workload=production
+kubectl get nodes --show-labels=true
+```
+
+2. Проверка доступности из shell оболочки _pod_ **web**:
+
+```bash
+APISERVER=https://minikube:8443
+SERVICEACCOUNT=/var/run/secrets/kubernetes.io/serviceaccount
+NAMESPACE=$(cat ${SERVICEACCOUNT}/namespace)
+TOKEN=$(cat ${SERVICEACCOUNT}/token)
+CACERT=${SERVICEACCOUNT}/ca.crt
+
+curl -k --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api 
+curl -k -s --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/metrics | head -5
+```
+
+Результат:
+
+```output
+
+# HELP aggregator_discovery_aggregation_count_total [ALPHA] Counter of number of times discovery was aggregated
+# TYPE aggregator_discovery_aggregation_count_total counter
+aggregator_discovery_aggregation_count_total 558
+...
+```
+
+3. Возможность внесения изменений через API, см. `console`
+
+```bash
+curl -k --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/apis/apps/v1/namespaces/${NAMESPACE}/deployments
+curl -k --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/${NAMESPACE}/endpoints
+curl -k --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/${NAMESPACE}/pods
+curl -k --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/${NAMESPACE}/services
+curl -k --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/web
+
+curl -k --cacert ${CACERT} --retry 3 --retry-delay 3 -X PATCH \
+  -H "Content-Type: application/strategic-merge-patch+json" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  --data '{"spec":{"replicas":4}}' \
+  ${APISERVER}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/web
+  
+curl -ks --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/web | jq -r '.spec.replicas'
+```
+
+Проверка, что доступность получения списка _list_ endpoints не выполняется, но есть доступ _get_ к endpoint /metrics-server
+
+```bash
+curl -ks --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/kube-system/endpoints | jq -r '.message'
+```
+
+
+```output
+endpoints is forbidden: User "system:serviceaccount:homework:monitoring" cannot list resource "endpoints" in API group "" in the namespace "kube-system"
+```
+
+```bash
+curl -ks --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -X GET ${APISERVER}/api/v1/namespaces/kube-system/endpoints/metrics-server | jq -r '.metadata.name'
+```
+
+```output
+metrics-server
+```
+
+4. Манифесты для создания _Service Account_'а **cd** в папке `cd`:
+  
+```bash
+kubectl get secret cd -n homework  -o jsonpath='{.data.ca\.crt}' | base64 --decode > ca.crt
+kubectl create token cd --namespace homework --duration=24h > token
+
+kubectl config set-cluster minikube-cd --server=https://192.168.49.2:8443 --certificate-authority=ca.crt
+kubectl config set-credentials cd --token="$(kubectl create token cd --namespace homework --duration=24h)"
+kubectl config set-context minikube-cd --cluster=minikube-cd --user=cd --namespace=homework
+kubectl config use-context minikube-cd
+```
+
+![Reference](/images/Screenshot_20240310_155821.png)
+
+Проверка, что в своём _namespace_ **homework** доступ есть, но не более
+
+```bash
+kubectl --kubeconfig kubeconfig  get deployments -o wide
+```
+
+```output
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS      IMAGES                                  SELECTOR
+web    1/1     1            1           40m   metrics,nginx   curlimages/curl,nginx:1.25.4-bookworm   app=nginx,component=homework
+```
+
+```bash
+kubectl --kubeconfig kubeconfig --namespace default get deployments
+```
+
+```output
+Error from server (Forbidden): deployments.apps is forbidden: User "system:serviceaccount:homework:cd" cannot list resource "deployments" in API group "apps" in the namespace "default"
+```
+
+#### Задание с *
+
+1. Добавлен в манифест `web/deployment.yaml` дополнительный _pod_ для скачивания и сохранения результата /metrics, содержимое которого доступно по адресу /metrics.html
+
+![Reference](/images/Screenshot_20240310_152443.png)
+---
+
+#### Список документации:
+
+- [JSON Web Tokens](https://jwt.io)
+- [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+- [Organizing Cluster Access Using kubeconfig Files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig)
+- [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac)
+- [Determine the Request Verb](https://kubernetes.io/docs/reference/access-authn-authz/authorization/#determine-the-request-verb)
+- [Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account)
 
 ---
 
