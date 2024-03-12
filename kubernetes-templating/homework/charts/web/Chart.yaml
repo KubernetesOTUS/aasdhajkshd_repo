@@ -1,0 +1,12 @@
+apiVersion: v2
+name: web
+description: A Helm chart for Web application
+type: application
+version: 0.0.1
+appVersion: "1.16.0"
+keywords:
+  - nginx
+home: https://helm.sh/docs/topics/charts/
+sources:
+  - https://github.com/Kuber-2023-12OTUS/aasdhajkshd_repo
+

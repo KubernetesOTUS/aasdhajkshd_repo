@@ -1,0 +1,15 @@
+dependencies:
+- name: web
+  repository: ""
+  version: ^0.0.1
+- name: loki
+  repository: https://grafana.github.io/helm-charts
+  version: 2.16.0
+- name: promtail
+  repository: https://grafana.github.io/helm-charts
+  version: 6.15.5
+- name: kafka
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 27.1.0
+digest: sha256:b9cd67ead9cb9449d238c4e4f3f8efc1cf4ddbab216ef92ca8fb8cc216d751d9
+generated: "2024-03-11T14:19:15.885882644+03:00"

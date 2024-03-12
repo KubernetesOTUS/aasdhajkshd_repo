@@ -1,0 +1,14 @@
+bases:
+  - .helmfile/environments.yaml
+  - .helmfile/repositories.yaml
+  - .helmfile/releases.yaml
+helmDefaults:
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true

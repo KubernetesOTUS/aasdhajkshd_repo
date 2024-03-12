@@ -1,0 +1,9 @@
+templates:
+  .default: &default
+    missingFileHandler: Info
+    values:
+      - envs/{{ .Environment.Name }}/*.*
+environments:
+  staging:
+    <<: *default
+  

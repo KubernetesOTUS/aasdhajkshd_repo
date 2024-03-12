@@ -1,0 +1,57 @@
+repositories:
+  - name: stable
+    url: https://charts.helm.sh/stable
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: kafka
+    url: oci://registry-1.docker.io/bitnamicharts/kafka
+    oci: true
+helmDefaults:
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true
+  timeout: 3600
+releases:
+  - name: kafka-dev
+    chart: bitnami/kafka
+    version: ^27.1.1
+    namespace: dev
+    atomic: true
+    historyMax: 2
+    cascade: "foreground"
+    kubeContext: kind
+    suppressDiff: true
+    values:
+      - listeners:
+          client:
+            protocol: PLAINTEXT
+          controller:
+            protocol: PLAINTEXT
+          interbroker:
+            protocol: PLAINTEXT
+          external:
+            protocol: PLAINTEXT
+      - controller:
+          replicaCount: 1
+  - name: kafka-prod
+    chart: bitnami/kafka 
+    version: ^25.3.5
+    namespace: prod
+    atomic: true
+    historyMax: 10
+    cascade: "background"
+    kubeContext: kind
+    suppressDiff: true
+    values:
+      - controller:
+          replicaCount: 5
+          persistence:
+            size: 1Gi
+          logPersistence:
+            size: 1Gi
