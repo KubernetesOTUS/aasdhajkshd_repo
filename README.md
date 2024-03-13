@@ -16,6 +16,78 @@ aasdhajkshd repository
 * [Сетевая подсистема и сущности Kubernetes](#kubernetes-networks)
 * [Хранение данных в Kubernetes: Volumes, Storages, Statefull-приложения](#kubernetes-volumes)
 * [Основы безопасности в Kubernetes](#kubernetes-security)
+* [Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)](#kubernetes-templating)
+
+## <a name="kubernetes-templating">Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)</a>
+
+## ДЗ // Шаблонизация манифестов приложения, использование Helm. Установка community Helm charts
+
+#### Выполнение
+
+**Задание 1**
+
+Создан helm-chart `web`, который позволяет устанавливать приложение, которое использует манифесты из ДЗ 1-5. Учетены основные параметны: имена контейнеров, имена объектов, используемые образы, хостов, порты, количество запускаемых реплик и т.д. 
+
+Описание переменных вынесены в _values.yaml_ в Chart'е `homework/web`.
+
+```bash
+for i in metrics-server dashboard volumesnapshots ingress-dns ingress storage-provisioner csi-hostpath-driver; do minikube addons enable $i; done
+helm repo update
+helm dependency build homework/
+helm template --debug web homework/
+helm install --atomic --debug web homework/
+```
+
+Loki прописан как сервис-зависимость в `homework/Chart.yaml`.
+
+**Задание 2**
+
+> All listeners are configured with protocol 'SASL_PLAINTEXT' by default. See [Upgrading](https://github.com/bitnami/charts/tree/main/bitnami/kafka)
+
+```bash
+export HELM_EXPERIMENTAL_OCI=1
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm pull oci://registry-1.docker.io/bitnamicharts/kafka --version ^25.3.5 --untar --untardir kafka-25.3.5
+```
+
+Установка локально для проверки в minikube:
+
+```bash
+helm install --atomic kafka bitnami/kafka --version ^25.3.5 \
+ --create-namespace --namespace prod \
+ --set controller.replicaCount=5,listeners.persistence.size=1Gi,logPersistence.size=1Gi,auth.clientProtocol=plaintext,serviceAccount.create=true
+  
+helm install --atomic kafka bitnami/kafka --version ^27.1.1 \
+ --create-namespace --namespace dev \
+ --set controller.replicaCount=1,listeners.client.protocol=PLAINTEXT,listeners.controller.protocol=PLAINTEXT,listeners.interbroker.protocol=PLAINTEXT,listeners.external.protocol=PLAINTEXT,persistence.size=1Gi,logPersistence.size=1Gi,auth.clientProtocol=plaintext,serviceAccount.create=true
+
+kubectl run kafka-client --restart='Never' --image docker.io/bitnami/kafka:3.7.0-debian-12-r0 --namespace dev --command -- sleep infinity
+
+PRODUCER: kafka-console-producer.sh --broker-list kafka-controller-0.kafka-controller-headless.dev.svc.cluster.local:9092 --topic test
+
+CONSUMER: kafka-console-consumer.sh --bootstrap-server kafka.dev.svc.cluster.local:9092 --topic test --from-beginning
+```
+
+![Reference](/images/Screenshot_20240311_214058.png)
+
+Установка в кластер _kind_ с помощью **helmfile**'а из директории:
+
+```bash
+helmfile init --force
+helmfile apply --kube-context kind -i -f ./helmfile.yaml
+```
+
+[Environment Values](https://helmfile.readthedocs.io/en/latest/#environment-values)
+
+В директории `helmfile` можно выполнить установку с использованием переназначения _dev_ в _staging_:
+
+```bash
+helmfile template --kube-context kind --debug --environment staging -f helmfile/helmfile.yaml
+```
+
+PS. не получается использовать как в примере [Helmfile Быстрый старт](ttps://github.com/zam-zam/helmfile-examples) [_Templates_](https://helmfile.readthedocs.io/en/latest/#environment-values)
+
+---
 
 ## <a name="kubernetes-security">Основы безопасности в Kubernetes</a>
 

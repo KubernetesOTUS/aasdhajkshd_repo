@@ -1,0 +1,38 @@
+releases:
+  - name: kafka-{{ .Environment.Name | default "dev" }}
+    chart: bitnami/kafka 
+    version: ^27.1.1
+    atomic: true
+    historyMax: 2
+    cascade: "foreground"
+    suppressDiff: true
+    namespace: {{ .Environment.Name | default "dev" }}
+    kubeContext: kind-{{ .Environment.Name | default "dev" }}
+    values:
+      - listeners:
+          client:
+            protocol: PLAINTEXT
+          controller:
+            protocol: PLAINTEXT
+          interbroker:
+            protocol: PLAINTEXT
+          external:
+            protocol: PLAINTEXT
+      - controller:
+          replicaCount: 1
+  - name: kafka-prod
+    chart: bitnami/kafka 
+    version: ^25.3.5
+    namespace: prod
+    atomic: true
+    historyMax: 10
+    cascade: "background"
+    kubeContext: kind
+    suppressDiff: true
+    values:
+      - controller:
+          replicaCount: 5
+          persistence:
+            size: 1Gi
+          logPersistence:
+            size: 1Gi
