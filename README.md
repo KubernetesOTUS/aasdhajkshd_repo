@@ -17,16 +17,74 @@ aasdhajkshd repository
 * [Хранение данных в Kubernetes: Volumes, Storages, Statefull-приложения](#kubernetes-volumes)
 * [Основы безопасности в Kubernetes](#kubernetes-security)
 * [Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)](#kubernetes-templating)
+* [Custom Resource Definitions. Operators](#kubernetes-operators)
+
+---
+
+## <a name="kubernetes-operators">Custom Resource Definitions. Operators</a>
+
+### ДЗ // Создание собственного CRD
+
+#### Выполнение
+
+В папке `kubernetes-operators/manifests` приложены файлы для первой части задания.
+Образ с *Kopf* был пересобран _23f03013e37f/otus-2023-12-mysql-operator:0.0.1_, внесены изменения с учётом "ошибок" типа _AlreadyExists_ и добавлено [удаление](https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/CoreV1Api.md#delete_namespaced_persistent_volume_claim).
+
+#### Задание с *
+
+Рассмотрено уменьшение возможности прав доступа для макета _clusterrole.yaml_. Значения подбирался с учетом ошибкок *Forbidden:403*, анализируя log pod'а _mysql-operator_ на попытки создать через API резурсы в кластере.
+
+#### Задание с **
+
+```bash
+curl -L -o kubebuilder "https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH)"
+chmod +x kubebuilder && sudo mv kubebuilder /usr/local/bin/
+mkdir -p mysql
+git clone git@github.com:grtl/mysql-operator.git
+wget https://go.dev/dl/go1.22.1.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.22.1.linux-amd64.tar.gz
+
+cd mysql
+
+kubebuilder init --repo mysql
+kubebuilder create api --group otus.homework --namespaced --version v1 --kind MySQL --controller --resource --plural mysqls --force
+
+make manifests
+
+make run
+
+kubectl apply -f config/crd/bases/otus.homework_mysqls.yaml
+kubectl apply -f config/samples/otus.homework_v1_mysql.yaml
+kubectl api-resources -o wide --api-group='otus.homework'
+kubectl api-versions
+kubectl get mysqls
+```
+
+В _kubebuilder_ изменения вносились в файлы:
+
+- `kubernetes-operators/mysql/api/v1/mysql_types.go`, например, в части структуры "type MySQLSpec struct"
+- `kubernetes-operators/mysql/internal/controller/mysql_controller.go` в методе "Reconcile" добавлены примеры, как знакомство, содание сущностей ServiceAccount, ClusterRole, ClusterRoleBinding и Deployment оператора MySQL, рассмотрен вариант удаления,
+- `kubernetes-operators/mysql/internal/controller/mysql_controller_test.go` добавлен пример проверки значений из *mysql.spec*.
+
+---
+
+#### Список документации:
+
+[KubeBuilber Quick Start](https://book.kubebuilder.io/quick-start.html)
+[Package v1 is the v1 version of the core API](https://pkg.go.dev/k8s.io/api@v0.29.0/core/v1)
+[Custom Resource Definitions (CRD) в Kubernetes. Операторы](https://youtu.be/AuuIhT1QeSI?si=3aGQHLoYDw8Vzc8W)
+
+---
 
 ## <a name="kubernetes-templating">Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)</a>
 
-## ДЗ // Шаблонизация манифестов приложения, использование Helm. Установка community Helm charts
+### ДЗ // Шаблонизация манифестов приложения, использование Helm. Установка community Helm charts
 
 #### Выполнение
 
 **Задание 1**
 
-Создан helm-chart `web`, который позволяет устанавливать приложение, которое использует манифесты из ДЗ 1-5. Учетены основные параметны: имена контейнеров, имена объектов, используемые образы, хостов, порты, количество запускаемых реплик и т.д. 
+Создан helm-chart `web`, который позволяет устанавливать приложение, которое использует манифесты из ДЗ 1-5. Учетены основные параметры: имена контейнеров, имена объектов, используемые образы, хостов, порты, количество запускаемых реплик и т.д.
 
 Описание переменных вынесены в _values.yaml_ в Chart'е `homework/web`.
 
@@ -91,7 +149,7 @@ PS. не получается использовать как в примере 
 
 ## <a name="kubernetes-security">Основы безопасности в Kubernetes</a>
 
-## ДЗ // Настройка сервисных аккаунтов и ограничение прав для них
+### ДЗ // Настройка сервисных аккаунтов и ограничение прав для них
 
 #### Выполнение
 
@@ -201,6 +259,7 @@ Error from server (Forbidden): deployments.apps is forbidden: User "system:servi
 1. Добавлен в манифест `web/deployment.yaml` дополнительный _pod_ для скачивания и сохранения результата /metrics, содержимое которого доступно по адресу /metrics.html
 
 ![Reference](/images/Screenshot_20240310_152443.png)
+
 ---
 
 #### Список документации:

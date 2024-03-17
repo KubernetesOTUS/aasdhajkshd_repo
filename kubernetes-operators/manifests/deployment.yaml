@@ -1,0 +1,30 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    component: homework
+    app: mysql-operator
+    app.kubernetes.io/name: mysql
+    app.kubernetes.io/instance: mysql-operator
+    app.kubernetes.io/part-of: mysql
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: mysql
+  name: mysql-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: homework
+      app: mysql-operator
+  template:
+    metadata:
+      labels:
+        component: homework
+        app: mysql-operator
+    spec:
+      serviceAccountName: mysql-operator
+      containers:
+        - name: mysql-operator
+          image: 23f03013e37f/otus-2023-12-mysql-operator:0.0.1 # roflmaoinmysoul/mysql-operator:1.0.0
+          imagePullPolicy: "Always"
