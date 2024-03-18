@@ -70,9 +70,9 @@ kubectl get mysqls
 
 #### Список документации:
 
-[KubeBuilber Quick Start](https://book.kubebuilder.io/quick-start.html)
-[Package v1 is the v1 version of the core API](https://pkg.go.dev/k8s.io/api@v0.29.0/core/v1)
-[Custom Resource Definitions (CRD) в Kubernetes. Операторы](https://youtu.be/AuuIhT1QeSI?si=3aGQHLoYDw8Vzc8W)
+- [KubeBuilber Quick Start](https://book.kubebuilder.io/quick-start.html)
+- [Package v1 is the v1 version of the core API](https://pkg.go.dev/k8s.io/api@v0.29.0/core/v1)
+- [Custom Resource Definitions (CRD) в Kubernetes. Операторы](https://youtu.be/AuuIhT1QeSI?si=3aGQHLoYDw8Vzc8W)
 
 ---
 
