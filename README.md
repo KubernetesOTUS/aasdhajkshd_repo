@@ -18,6 +18,27 @@ aasdhajkshd repository
 * [Основы безопасности в Kubernetes](#kubernetes-security)
 * [Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)](#kubernetes-templating)
 * [Custom Resource Definitions. Operators](#kubernetes-operators)
+* [Мониторинг компонентов кластера и приложений, работающих в нем](#kubernetes-monitoring)
+
+---
+
+## <a name="kubernetes-monitoring">Мониторинг компонентов кластера и приложений, работающих в нем</a>
+
+### ДЗ // Мониторинг приложения в кластере
+
+#### Выполнение
+
+Docker контейнер с _nginx:1.25.4-bookworm_ уже собран с модулем **--with-http_stub_status_module**, поэтому в `charts/web/values.yaml` для сбору метрик остается добавить "location = /basic_status"
+
+Адаптирован Chart `homework/charts/web` из предыдущего задания и к _helmfile.yaml_ добавлены _prometheus operator_ и _nginx prometheus exporter_.
+Добавлен файл в шаблоны `homework/charts/web/templates/servicemonitor.yaml`
+
+```bash
+helmfile apply -f helmfile.yaml
+kubectl port-forward services/kube-prometheus-prometheus 9090:9090
+```
+
+![Reference](/images/Screenshot_20240319_003556.png)
 
 ---
 

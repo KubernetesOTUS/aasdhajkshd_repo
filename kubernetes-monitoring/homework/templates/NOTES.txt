@@ -1,0 +1,9 @@
+1. Get the application URL by running these commands:
+{{- if .Values.web.ingress.enabled }}
+{{- range $host := .Values.web.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.web.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  In case of minikube contexts, do not forget to add hostname {{ $host.host }} to your hosts file.
+  {{- end }}
+{{- end }}
+{{- end }}

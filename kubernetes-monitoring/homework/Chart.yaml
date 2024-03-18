@@ -1,0 +1,40 @@
+apiVersion: v2
+name: web
+description: A Helm chart for Web application
+type: application
+version: 0.0.1
+appVersion: "1.16.0"
+keywords:
+  - nginx
+  - loki
+  - promtail
+  - grafana
+  - prometheus
+home: https://grafana.com/loki
+sources:
+  - https://github.com/grafana/loki
+dependencies:
+  - name: "web"
+    condition: web.enabled
+    # repository: https://github.com/Kuber-2023-12OTUS/aasdhajkshd_repo/kubernetes-monitoring/homework/charts/web
+    version: "^0.0.1"
+  - name: "loki"
+    condition: loki.enabled
+    repository: "https://grafana.github.io/helm-charts"
+    version: "^2.15.2"
+  - name: "promtail"
+    condition: promtail.enabled
+    repository: "https://grafana.github.io/helm-charts"
+    version: "^6.7.4"
+  - name: "grafana"
+    condition: grafana.enabled
+    version: "~6.43.0"
+    repository: "https://grafana.github.io/helm-charts"
+  - name: "prometheus"
+    condition: prometheus.enabled
+    version: "~19.7.2"
+    repository: "https://prometheus-community.github.io/helm-charts"
+maintainers:
+  - name: John Doe
+    email: john.doe@example.com
+icon: https://bitnami.com/assets/stacks/kafka/img/kafka-stack-220x234.png

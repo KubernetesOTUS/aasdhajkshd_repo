@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: console
+  labels:
+    component: homework
+    app: console
+  namespace: default
+spec:
+  containers:
+  - name: console
+    image: alpine:latest
+    imagePullPolicy: IfNotPresent
+    command:
+      - /bin/sh
+      - "-c"
+      - "sleep 60m"
+    lifecycle:
+      postStart:
+        exec:
+          command: ["sh", "-c", "apk update && apk add bash curl wget jq kubectl helm inetutils-telnet rsync ansible ansible-lint yamllint golangci-lint gitlint jq yq openssl"]
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "1000m"
+  restartPolicy: Always
+  dnsPolicy: Default
+  dnsConfig:
+    nameservers:
+      - "8.8.8.8"
