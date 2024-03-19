@@ -66,12 +66,12 @@ monitoring:
   enabled: true
 
 serviceMonitor:
-  enabled: true
+  enabled: false
   annotations: {}
   routePrefix: /metrics
-  selectorLabels:
-    app.kubernetes.io/instance: prometheus-nginx-exporter
-    app.kubernetes.io/name: prometheus-nginx-exporter
+  selectorLabels: {}
+  #  app.kubernetes.io/instance: prometheus-nginx-exporter
+  #  app.kubernetes.io/name: prometheus-nginx-exporter
 
 strategy:
   type: RollingUpdate

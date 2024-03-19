@@ -36,13 +36,14 @@ releases:
     needs:
       - kube-prometheus
     values:
-      - ingress:
-          enabled: false
-      - serviceMonitor:
-          enabled: true
-          selectorLabels:
-            app.kubernetes.io/instance: prometheus-nginx-exporter
-            app.kubernetes.io/name: prometheus-nginx-exporter
+      - web:
+          ingress:
+            enabled: false
+          serviceMonitor:
+            enabled: true
+            selectorLabels:
+              app.kubernetes.io/instance: prometheus-nginx-exporter
+              app.kubernetes.io/name: prometheus-nginx-exporter
   - name: kube-prometheus
     chart: bitnami/kube-prometheus
     version: 8.30.1
