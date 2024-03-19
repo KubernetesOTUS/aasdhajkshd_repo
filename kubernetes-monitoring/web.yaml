@@ -19,6 +19,7 @@ releases:
     kubeContext: minikube
     suppressDiff: true
     values: 
-      - ingress:
+      web: 
+        ingress:
           enabled: false
           
