@@ -1,0 +1,78 @@
+repositories:
+  - name: stable
+    url: https://charts.helm.sh/stable
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: kafka
+    url: oci://registry-1.docker.io/bitnamicharts/kafka
+    oci: true
+  - name: kube-prometheus
+    url: oci://registry-1.docker.io/bitnamicharts/kube-prometheus
+    oci: true 
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+helmDefaults:
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true
+  timeout: 3600
+releases:
+  - name: web
+    chart: ./homework
+    version: 0.0.1
+    historyMax: 2
+    cascade: "foreground"
+    namespace: default
+    kubeContext: minikube
+    suppressDiff: true
+    needs:
+      - kube-prometheus
+    values:
+      - web:
+          ingress:
+            enabled: false
+          serviceMonitor:
+            enabled: true
+            selectorLabels:
+              app.kubernetes.io/instance: prometheus-nginx-exporter
+              app.kubernetes.io/name: prometheus-nginx-exporter
+  - name: kube-prometheus
+    chart: bitnami/kube-prometheus
+    version: 8.30.1
+    namespace: default
+    kubeContext: minikube
+    suppressDiff: true
+    values:
+      - alertmanager:
+          enabled: false
+      - blackboxExporter:
+          enabled: false
+      - operator:
+          logLevel: debug
+  - name: prometheus-nginx-exporter 
+    chart: prometheus-community/prometheus-nginx-exporter
+    version: 0.2.1
+    namespace: default
+    kubeContext: minikube
+    suppressDiff: true
+    needs:
+      - minikube/default/web
+      - kube-prometheus
+    values:
+      - nginxServer: "http://web:8000/stub_status"
+      - resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      - metrics:
+          enabled: false
+          serviceMonitor:
+            enabled: false

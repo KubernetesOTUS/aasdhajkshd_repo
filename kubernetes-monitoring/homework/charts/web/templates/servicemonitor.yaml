@@ -1,0 +1,40 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "this.fullname" . }}
+  labels: 
+    {{- include "this.labels" . | nindent 4 }}
+  {{- if or .Values.podAnnotations .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- .Values.podAnnotations | nindent 4 }}
+    {{- .Values.serviceMonitor.annotations  | nindent 4 }}
+  {{- end }}
+  namespace: {{ include "this.namespace" . }}
+spec:
+  selector:
+    matchLabels: {{- if .Values.serviceMonitor.selectorLabels -}}
+      {{ toYaml .Values.serviceMonitor.selectorLabels | nindent 6 }}
+      {{- else }}
+      {{- include "this.selectorLabels" . | nindent 6 }}
+      {{- end }}
+  namespaceSelector:
+    matchNames:
+      - {{ include "this.namespace" . | quote }}
+  endpoints:
+    - port: http
+      path: {{ trimSuffix "/" .Values.serviceMonitor.routePrefix | default "metrics" }}
+      {{- if .Values.serviceMonitor.interval }}
+      interval: {{ .Values.serviceMonitor.interval }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      {{- end }}
+      {{- if .Values.serviceMonitor.honorLabels }}
+      honorLabels: true
+      {{- end }}
+      {{- if .Values.serviceMonitor.metricRelabelings }}
+      metricRelabelings:
+      {{ toYaml .Values.serviceMonitor.metricRelabelings | indent 4 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,25 @@
+helmDefaults:
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true
+  timeout: 3600
+releases:
+  - name: web
+    chart: ./homework
+    version: 0.0.1
+    historyMax: 2
+    cascade: "foreground"
+    namespace: default
+    kubeContext: minikube
+    suppressDiff: true
+    values: 
+      web: 
+        ingress:
+          enabled: false
+          
