@@ -58,7 +58,7 @@ yc storage bucket create --name s3-$YC_FOLDER_ID-loki
 yc iam service-account create --name $SA_LOKI_NAME --description "Loki Service Account for S3 bucket"
 YC_SA_ID=$(yc iam service-account get --name $SA_LOKI_NAME --format json | jq -r '.id')
 yc iam service-account add-access-binding $YC_SA_ID --role storage.editor --subject userAccount:$YC_SA_ID
-yc iam key create --service-account-name $SA_LOKI_NAME --output ../.secrets/key.json
+yc iam key create --service-account-name $SA_LOKI_NAM   E --output ../.secrets/key.json
 yc iam access-key create --service-account-name=$SA_LOKI_NAME
 helmfile apply -f helmfile.yaml
 kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
@@ -78,6 +78,8 @@ secret: YCMSWoEO5WKT4-r5XKkw**********
 
 ```
 
+![Reference](/images/Screenshot_20240402_134700.png)
+
 Импорт dashboard [Logs / App](https://grafana.com/grafana/dashboards/13639-logs-app/)
 
 Можно попробовать применить [LogQL](https://sbcode.net/grafana/nginx-promtail/) для выделения сообщений из [fake log generator](https://github.com/mingrammer/flog)
@@ -86,7 +88,7 @@ secret: YCMSWoEO5WKT4-r5XKkw**********
 {job="monitoring/flog"} | regexp `(?P<timestamp>\w{3} \d{2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<program>\S+)\[(?P<pid>\d+)\]: (?P<message>.*)`
 ```
 
-![Reference](Screenshot_20240401_131100.png)
+![Reference](/images/Screenshot_20240401_131100.png)
 
 ---
 
