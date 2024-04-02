@@ -1,0 +1,237 @@
+repositories:
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: loki
+    url: oci://cr.yandex/yc-marketplace/yandex-cloud/grafana/loki/chart
+    oci: true
+helmDefaults: 
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true
+  timeout: 3600
+releases:
+  - name: loki
+    chart: loki
+    version: 1.1.2
+    namespace: monitoring
+    kubeContext: yc-k8s-otus-kuber-repo-cluster
+    suppressDiff: false
+    set:
+      - name: loki-distributed.loki.storageConfig.aws.bucketnames
+        value: s3-b1gui0rctn8j2m54dpnu-loki
+      - name:  loki-distributed.serviceaccountawskeyvalue_generated.accessKeyID
+        value: YCAJENo8j5r0mfUvt6pHdneUY
+      - name: loki-distributed.serviceaccountawskeyvalue_generated.secretAccessKey
+        value: YCMSWoEO5WKT4-r5XKkw**********
+    values:
+      - promtail:
+          enabled: true
+          tolerations:
+            - key: node-role
+              operator: Equal
+              value: infra
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/master
+              effect: NoSchedule
+              operator: Exists
+            - key: node-role.kubernetes.io/control-plane
+              effect: NoSchedule
+              operator: Exists
+          config:
+            snippets:
+              extraRelabelConfigs:
+                - source_labels: [log]
+                  action: replace
+                  target_label: message
+      - loki-distributed:
+          loki:
+            tolerations:
+              - key: node-role
+                operator: Equal
+                value: infra
+                effect: NoSchedule 
+            distributor:
+              tolerations:
+                - key: node-role
+                  operator: Equal
+                  value: infra
+                  effect: NoSchedule
+            gateway:
+              tolerations:
+                - key: node-role
+                  operator: Equal
+                  value: infra
+                  effect: NoSchedule
+            ingester:
+              tolerations:
+                - key: node-role
+                  operator: Equal
+                  value: infra
+                  effect: NoSchedule
+            querier:
+              tolerations:
+                - key: node-role
+                  operator: Equal
+                  value: infra
+                  effect: NoSchedule
+  - name: grafana
+    chart: bitnami/grafana
+    version: 8.4.6
+    namespace: monitoring
+    kubeContext: yc-k8s-otus-kuber-repo-cluster
+    suppressDiff: false
+    values:
+      - admin:
+          user: "admin"
+          password: "admin"
+      - grafana:
+          tolerations:
+            - key: node-role
+              operator: Equal
+              value: infra
+              effect: NoSchedule
+          nodeSelector:
+            workload: infra
+      - datasources:
+          secretDefinition:
+            apiVersion: 1
+            datasources:
+              - name: Loki
+                type: Loki
+                access: proxy
+                url: http://loki-loki-distributed-gateway
+                jsonData:
+                  maxLines: 1000
+  # - name: loki-stack
+  #   chart: grafana/loki-stack
+  #   version: 2.10.2
+  #   namespace: monitoring
+  #   kubeContext: yc-k8s-otus-kuber-repo-cluster
+  #   suppressDiff: false
+  #   values:
+  #     - test_pod:
+  #         enabled: true
+  #     - loki:
+  #         enabled: true
+  #         isDefault: true
+  #         image:
+  #           pullPolicy: Always
+  #         storage:
+  #           type: s3
+  #           s3:
+  #             s3: https://storage.yandexcloud.net
+  #             insecure: false
+  #           structuredConfig:
+  #             storage_config:
+  #               aws:
+  #                 endpoint: storage.yandexcloud.net
+  #                 bucketnames: s3-b1gui0rctn8j2m54dpnu-loki
+  #                 region: ru-central1
+  #                 access_key_id: YCAJENo8j5r0mfUvt6pHdneUY
+  #                 secret_access_key: YCMSWoEO5WKT4-r5XKkw********** 
+  #                 s3forcepathstyle: true
+  #               boltdb_shipper:
+  #                 shared_store: s3
+  #             schema_config:
+  #               configs:
+  #                 - from: "2020-09-07"
+  #                   store: boltdb-shipper
+  #                   object_store: aws
+  #                   schema: v11
+  #                   index:
+  #                     prefix: loki_index_
+  #                     period: 24h
+  #         compactor:
+  #           shared_store: s3
+  #           compaction_interval: 10m
+  #           retention_enabled: true
+  #           retention_delete_delay: 2h
+  #           retention_delete_worker_count: 150
+  #           working_directory: /var/loki/chunks
+  #         serviceAccount:
+  #             annotations:
+  #               "eks.amazonaws.com/role-arn": "arn:aws:iam::ajep4lthb5kaql17jfdv:role/storage.editor"
+  #         auth_enabled: true
+  #         serviceMonitor:
+  #           enabled: false
+  #         tokengen:
+  #           enabled: true
+  #           tolerations:
+  #             - key: node-role
+  #               operator: Equal
+  #               value: infra
+  #               effect: NoSchedule
+  #         ingester:
+  #           enabled: true
+  #           tolerations:
+  #             - key: node-role
+  #               operator: Equal
+  #               value: infra
+  #               effect: NoSchedule
+  #         distributor:
+  #           enabled: true
+  #           tolerations:
+  #             - key: node-role
+  #               operator: Equal
+  #               value: infra
+  #               effect: NoSchedule
+  #         querier:
+  #           enabled: true
+  #           tolerations:
+  #             - key: node-role
+  #               operator: Equal
+  #               value: infra
+  #               effect: NoSchedule  
+  #           nodeSelector: {}
+  #         queryFrontend:
+  #         gateway:
+  #           enabled: true
+  #           tolerations:
+  #             - key: node-role
+  #               operator: Equal
+  #               value: infra
+  #               effect: NoSchedule         
+  #     - promtail:
+  #         enabled: false
+  #         tolerations:
+  #         - key: node-role
+  #           operator: Equal
+  #           value: infra
+  #           effect: NoSchedule
+  #         - key: node-role.kubernetes.io/master
+  #           effect: NoSchedule
+  #           operator: Exists
+  #         - key: node-role.kubernetes.io/control-plane
+  #           effect: NoSchedule
+  #           operator: Exists
+  #     - fluent-bit:
+  #         enabled: false
+  #     - grafana:
+  #         enabled: false
+  #         tolerations:
+  #         - key: node-role
+  #           operator: Equal
+  #           value: infra
+  #           effect: NoSchedule
+  #         nodeSelector:
+  #           workload: infra
+  #         sidecar:
+  #           datasources:
+  #             enabled: true
+  #         grafana.ini:
+  #           users:
+  #             default_theme: light
+  #     - prometheus:
+  #         enabled: true
+  #         nodeSelector:
+  #           workload: infra
+  #     - filebeat:
+  #         enabled: false
+  #     - logstash:
+  #         enabled: false
