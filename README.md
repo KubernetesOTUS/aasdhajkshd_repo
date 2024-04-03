@@ -19,6 +19,76 @@ aasdhajkshd repository
 * [Шаблонизация манифестов. Helm и его аналоги (Jsonnet, Kustomize)](#kubernetes-templating)
 * [Custom Resource Definitions. Operators](#kubernetes-operators)
 * [Мониторинг компонентов кластера и приложений, работающих в нем](#kubernetes-monitoring)
+* [Сервисы централизованного логирования для компонентов Kubernetes и приложений](#kubernetes-logging)
+
+---
+
+## <a name="kubernetes-logging">Сервисы централизованного логирования для компонентов Kubernetes и приложений</a>
+
+### ДЗ // Сервисы централизованного логирования для Kubernetes
+
+#### Выполнение
+
+```bash
+kubectl taint nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) node-role=infra:NoSchedule
+kubectl get nodes
+kubectl label nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) workload=infra
+kubectl get node -o wide --show-labels
+
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
+```
+
+```output
+NAME                        STATUS   ROLES    AGE     VERSION   INTERNAL-IP     EXTERNAL-IP      OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME     LABELS
+cl1l5bap1aj1ve73gt9u-idib   Ready    <none>   151m    v1.27.3   192.168.21.8    158.160.57.240   Ubuntu 20.04.6 LTS   5.4.0-167-generic   containerd://1.6.22   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=standard-v3,beta.kubernetes.io/os=linux,failure-domain.beta.kubernetes.io/zone=ru-central1-a,kubernetes.io/arch=amd64,kubernetes.io/hostname=cl1l5bap1aj1ve73gt9u-idib,kubernetes.io/os=linux,node-group=default-pool,node.kubernetes.io/instance-type=standard-v3,node.kubernetes.io/kube-proxy-ds-ready=true,node.kubernetes.io/masq-agent-ds-ready=true,node.kubernetes.io/node-problem-detector-ds-ready=true,topology.kubernetes.io/zone=ru-central1-a,yandex.cloud/node-group-id=cath3tqaonav9gh3hugt,yandex.cloud/pci-topology=k8s,yandex.cloud/preemptible=true
+cl1l5bap1aj1ve73gt9u-ykuc   Ready    <none>   2d21h   v1.27.3   192.168.21.32   84.252.128.204   Ubuntu 20.04.6 LTS   5.4.0-167-generic   containerd://1.6.22   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=standard-v3,beta.kubernetes.io/os=linux,failure-domain.beta.kubernetes.io/zone=ru-central1-a,kubernetes.io/arch=amd64,kubernetes.io/hostname=cl1l5bap1aj1ve73gt9u-ykuc,kubernetes.io/os=linux,node-group=default-pool,node.kubernetes.io/instance-type=standard-v3,node.kubernetes.io/kube-proxy-ds-ready=true,node.kubernetes.io/masq-agent-ds-ready=true,node.kubernetes.io/node-problem-detector-ds-ready=true,topology.kubernetes.io/zone=ru-central1-a,**workload=infra**,yandex.cloud/node-group-id=cath3tqaonav9gh3hugt,yandex.cloud/pci-topology=k8s,yandex.cloud/preemptible=true
+
+NAME                        TAINTS
+cl1l5bap1aj1ve73gt9u-idib   <none>
+cl1l5bap1aj1ve73gt9u-ykuc   [map[effect:NoSchedule key:node-role value:infra]]
+```
+
+Создание бакета в _S3 object storage_ и _Service Account_ для доступа к бакету с ключами доступа:
+
+```bash
+export HELM_EXPERIMENTAL_OCI=1
+SA_LOKI_NAME=sa-otus-kuber-repo-loki
+YC_FOLDER_ID=$(yc resource-manager folder list --format json | jq -r '.[].id')
+yc storage bucket create --name s3-$YC_FOLDER_ID-loki
+yc iam service-account create --name $SA_LOKI_NAME --description "Loki Service Account for S3 bucket"
+YC_SA_ID=$(yc iam service-account get --name $SA_LOKI_NAME --format json | jq -r '.id')
+yc iam service-account add-access-binding $YC_SA_ID --role storage.editor --subject userAccount:$YC_SA_ID
+yc iam key create --service-account-name $SA_LOKI_NAM   E --output ../.secrets/key.json
+yc iam access-key create --service-account-name=$SA_LOKI_NAME
+helmfile apply -f helmfile.yaml
+kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+kubectl port-forward -n monitoring deployments/loki-stack-grafana 3000:3000
+kubectl -n monitoring create deployment flog --image=mingrammer/flog --replicas=3 -- flog -f rfc3164 -l -d 300ms
+kubectl -n monitoring get pods
+kubectl -n monitoring logs deployments/flog
+```
+
+```output
+access_key:
+  id: aje99pm9gsu2nersuojr
+  service_account_id: ajep4lthb5kaql17jfdv
+  created_at: "2024-03-29T20:04:39.629033107Z"
+  key_id: YCAJENo8j5r0mfUvt6pHdneUY
+secret: YCMSWoEO5WKT4-r5XKkw********** 
+
+```
+
+![Reference](/images/Screenshot_20240402_134700.png)
+
+Импорт dashboard [Logs / App](https://grafana.com/grafana/dashboards/13639-logs-app/)
+
+Можно попробовать применить [LogQL](https://sbcode.net/grafana/nginx-promtail/) для выделения сообщений из [fake log generator](https://github.com/mingrammer/flog)
+
+```logql
+{job="monitoring/flog"} | regexp `(?P<timestamp>\w{3} \d{2} \d{2}:\d{2}:\d{2}) (?P<hostname>\S+) (?P<program>\S+)\[(?P<pid>\d+)\]: (?P<message>.*)`
+```
+
+![Reference](/images/Screenshot_20240401_131100.png)
 
 ---
 
