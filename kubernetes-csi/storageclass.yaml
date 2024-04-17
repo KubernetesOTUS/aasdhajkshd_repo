@@ -1,0 +1,30 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-s3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  labels:
+    addonmanager.kubernetes.io/mode: "EnsureExists"
+    name: homework
+  namespace: default
+provisioner: ru.yandex.s3.csi
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+mountOptions:
+  - discard
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  guaranteedReadWriteLatency: "true"
+  mounter: geesefs
+  options: "--memory-limit 1000 --dir-mode 0777 --file-mode 0666"
+  bucket: s3-b1gui0rctn8j2m54dpnu-sci
+  csi.storage.k8s.io/provisioner-secret-name: csi-s3-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: kube-system
+  csi.storage.k8s.io/controller-publish-secret-name: csi-s3-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: kube-system
+  csi.storage.k8s.io/node-stage-secret-name: csi-s3-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: kube-system
+  csi.storage.k8s.io/node-publish-secret-name: csi-s3-secret
+  csi.storage.k8s.io/node-publish-secret-namespace: kube-system
+
