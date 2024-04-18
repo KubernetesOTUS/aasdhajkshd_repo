@@ -20,6 +20,109 @@ aasdhajkshd repository
 * [Custom Resource Definitions. Operators](#kubernetes-operators)
 * [Мониторинг компонентов кластера и приложений, работающих в нем](#kubernetes-monitoring)
 * [Сервисы централизованного логирования для компонентов Kubernetes и приложений](#kubernetes-logging)
+* [CSI. Обзор подсистем хранения данных в Kubernetes](#kubernetes-csi)
+---
+
+## <a name="kubernetes-csi">CSI. Обзор подсистем хранения данных в Kubernetes</a>
+
+### ДЗ // Установка и использование CSI драйвера
+
+#### Выполнение
+
+```bash
+export HELM_EXPERIMENTAL_OCI=1
+SA_CSI_NAME=sa-otus-kuber-repo-sci
+YC_FOLDER_ID=$(yc resource-manager folder list --format json | jq -r '.[].id')
+yc storage bucket create --name s3-$YC_FOLDER_ID-sci
+yc iam service-account create --name $SA_CSI_NAME --description "CSI Service Account for S3 bucket"
+YC_SA_ID=$(yc iam service-account get --name $SA_CSI_NAME --format json | jq -r '.id')
+yc resource-manager folder add-access-binding $YC_FOLDER_ID --role storage.editor --subject serviceAccount:$YC_SA_ID
+yc iam service-account set-access-bindings $YC_SA_ID --access-binding role=storage.editor,subject=serviceAccount:$YC_SA_ID
+yc iam key create --service-account-name $SA_CSI_NAME --output key.json
+yc iam access-key create --service-account-name=$SA_CSI_NAME
+```
+
+```output
+name: s3-b1gui0rctn8j2m54dpnu-sci
+folder_id: b1gui0rctn8j2m54dpnu
+anonymous_access_flags:
+  read: false
+  list: false
+default_storage_class: STANDARD
+versioning: VERSIONING_DISABLED
+acl: {}
+created_at: "2024-04-17T20:04:10.661832Z"
+...
+done (1s)
+id: aje4v88tldsqn6r90a67
+folder_id: b1gui0rctn8j2m54dpnu
+created_at: "2024-04-17T20:05:22.041230584Z"
+name: sa-otus-kuber-repo-sci
+description: CSI Service Account for S3 bucket
+...
+effective_deltas:
+  - action: ADD
+    access_binding:
+      role_id: storage.editor
+      subject:
+        id: aje4v88tldsqn6r90a67
+        type: serviceAccount
+...
+effective_deltas:
+  - action: ADD
+    access_binding:
+      role_id: storage.editor
+      subject:
+        id: aje4v88tldsqn6r90a67
+        type: serviceAccount
+...
+id: ajeaao7orubqv2r8bc8a
+service_account_id: aje4v88tldsqn6r90a67
+created_at: "2024-04-17T20:08:16.581124336Z"
+key_algorithm: RSA_2048
+...
+access_key:
+  id: aje5h876s8t8rpaqnah7
+  service_account_id: aje4v88tldsqn6r90a67
+  created_at: "2024-04-17T20:08:25.532555244Z"
+  key_id: YCAJENew8pXmv3i29jwIaupdV
+secret: YCOpVhF6QnbnKmlIauXTu5**********
+```
+
+```bash
+helm repo add yandex-s3 https://yandex-cloud.github.io/k8s-csi-s3/charts
+helm pull yandex-s3/csi-s3
+```
+
+Внесение изменений в `csi-s3/values.yaml`
+
+```bash
+helm install --atomic csi-s3 csi-s3/
+kubectl get storageclasses.storage.k8s.io csi-s3
+```
+
+```output
+NAME     PROVISIONER        RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+csi-s3   ru.yandex.s3.csi   Delete          Immediate           false                  52m
+```
+
+```bash
+kubectl apply -f pod.yaml
+kubectl get pvc csi-s3-pvc
+```
+
+```output
+NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+csi-s3-pvc   Bound    pvc-74261ccf-1a83-4169-9dc0-5954b03f60a4   5Gi        RWX            csi-s3         76m
+```
+
+![Reference](/images/Screenshot_20240418_005700.png)
+
+---
+
+#### Список документации:
+
+- [CSI for S3](https://github.com/yandex-cloud/k8s-csi-s3)
 
 ---
 
