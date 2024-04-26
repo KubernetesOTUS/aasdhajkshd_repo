@@ -1,0 +1,67 @@
+repositories:
+  - name: eso 
+    url: https://charts.external-secrets.io
+helmDefaults: 
+  cleanupOnFail: true
+  wait: true
+  atomic: true
+  devel: false
+  force: true
+  historyMax: 5
+  cascade: "background"
+  skipDeps: false
+  createNamespace: true
+  timeout: 3600
+releases:
+  - name: consul
+    chart: ./consul
+    version: 1.1.2
+    namespace: consul
+    kubeContext: yc-k8s-otus-kuber-repo-cluster
+    suppressDiff: false
+    set: []
+    values:
+      - global:
+          name: consul
+          datacenter: otus
+          secretsBackend:
+            vault:
+              vaultNamespace: "vault"
+            enabled: true
+      - server:
+          replicas: 3
+          storage: 1Gi
+  - name: vault
+    chart: ./vault
+    version: 1.1.2
+    namespace: vault
+    kubeContext: yc-k8s-otus-kuber-repo-cluster
+    suppressDiff: false
+    set: []
+    values:
+      - global:
+          namespace: vault
+          name: vault
+          datacenter: otus
+          secretsBackend:
+            vault:
+              vaultNamespace: "vault"
+            enabled: true
+      - server:
+          dataStorage:
+            enabled: true
+            size: 1Gi
+          ha:
+            enabled: true
+            replicas: 3
+      - ui:
+          enabled: true
+  - name: eso
+    chart: eso/external-secrets
+    version: 0.9.16
+    namespace: vault
+    kubeContext: yc-k8s-otus-kuber-repo-cluster
+    suppressDiff: true
+    set: []
+    values: []
+  

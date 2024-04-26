@@ -1,0 +1,4 @@
+consul/
+!consul/values.yaml
+vault/
+!vault/values.yaml
