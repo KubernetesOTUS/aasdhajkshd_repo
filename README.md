@@ -40,7 +40,7 @@ helmfile apply --validate -f helmfile.yaml
 ```bash
 vault operator init -key-shares=1 -key-threshold=1
 
-vault login token=hvs.ajFK2uROFdlP41Wyg1O5vhvA
+vault login token=hvs.ajFK2uROFd**********
 vault secrets enable -version=2 -description="Otus homework" -path=otus kv
 vault kv put otus/cred username='otus' password='asajkjkahs'
 
@@ -76,7 +76,7 @@ vault secrets list --detailed
 Проверка получения доступа, в `vault-0` нет curl, поэтому используем `kubernetes-monitoring/console.yaml`
 
 ```bash
-curl -vLk --header "X-Vault-Token: hvs.ajFK2uROFdlP41Wyg1O5vhvA" --request GET http://vault.vault.svc.cluster.local:8200/v1/otus/data/cred
+curl -vLk --header "X-Vault-Token: hvs.ajFK2uROFdl**********" --request GET http://vault.vault.svc.cluster.local:8200/v1/otus/data/cred
 ```
 
 Для доступа kubernetes применяются следующие манифесты:
