@@ -21,6 +21,140 @@ aasdhajkshd repository
 * [Мониторинг компонентов кластера и приложений, работающих в нем](#kubernetes-monitoring)
 * [Сервисы централизованного логирования для компонентов Kubernetes и приложений](#kubernetes-logging)
 * [CSI. Обзор подсистем хранения данных в Kubernetes](#kubernetes-csi)
+* [Хранилище секретов для приложений. Vault](#kubernetes-vault)
+
+---
+
+## <a name="kubernetes-vault">Хранилище секретов для приложений. Vault</a>
+
+### ДЗ // Хранилище секретов для приложения. Vault
+
+#### Выполнение
+
+```bash
+helmfile apply --validate -f helmfile.yaml
+```
+
+В `pod` _vault-X_ выполняется инициализация:
+
+```bash
+vault operator init -key-shares=1 -key-threshold=1
+
+vault login token=hvs.ajFK2uROFdlP41Wyg1O5vhvA
+vault secrets enable -version=2 -description="Otus homework" -path=otus kv
+vault kv put otus/cred username='otus' password='asajkjkahs'
+
+vault kv get otus/cred
+
+vault policy write otus-policy - <<EOF
+path "otus/*" {
+    capabilities = ["read", "list"]
+}
+EOF
+
+vault auth enable kubernetes
+
+vault write auth/kubernetes/config \
+  disable_iss_validation=true \
+  token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+  kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+  kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+  issuer="https://kubernetes.default.svc.cluster.local"
+  
+vault write auth/kubernetes/role/otus \
+  bound_service_account_names=vault-auth \
+  bound_service_account_namespaces=default,vault,external-secrets \
+  policies=otus-policy \
+  ttl=72h
+
+vault read auth/kubernetes/role/otus
+vault kv get -mount="otus" "cred"
+vault auth list
+vault secrets list --detailed
+```
+
+Проверка получения доступа, в `vault-0` нет curl, поэтому используем `kubernetes-monitoring/console.yaml`
+
+```bash
+curl -vLk --header "X-Vault-Token: hvs.ajFK2uROFdlP41Wyg1O5vhvA" --request GET http://vault.vault.svc.cluster.local:8200/v1/otus/data/cred
+```
+
+Для доступа kubernetes применяются следующие манифесты:
+
+```bash
+kubectl apply -n vault -f serviceaccount.yaml
+kubectl apply -n vault -f clusterrolebinding.yaml
+kubectl apply -n vault -f external-secrets.yaml
+```
+
+Проверка создания ESO секретов из Vault'а:
+
+```bash
+kubectl get externalsecrets.external-secrets.io
+kubectl describe externalsecrets.external-secrets.io vault-otus-cred-kubernetes
+kubectl describe secrets otus-cred
+kubectl apply -f pod.yaml
+kubectl exec -ti -n vault pods/test -- cat /vault/secrets/config.txt
+```
+
+Результат:
+
+```output
+NAME                         STORE                      REFRESH INTERVAL   STATUS         READY
+vault-otus-cred-kubernetes   vault-backend-kubernetes   15s                SecretSynced   True
+vault-otus-cred-token        vault-backend-token        15s                SecretSynced   True
+...
+
+Status:
+  Binding:
+    Name:  otus-cred
+  Conditions:
+    Last Transition Time:   2024-04-26T16:06:52Z
+    Message:                Secret was synced
+    Reason:                 SecretSynced
+    Status:                 True
+    Type:                   Ready
+  Refresh Time:             2024-04-26T16:08:42Z
+  Synced Resource Version:  1-363819bb4b55b71d2b8af02b17981e24
+Events:
+  Type    Reason   Age                From              Message
+  ----    ------   ----               ----              -------
+  Normal  Updated  2s (x8 over 112s)  external-secrets  Updated Secret
+...
+
+Name:         otus-cred
+Namespace:    default
+Labels:       reconcile.external-secrets.io/created-by=154221e1de97ef5e01363f3b2b524406
+Annotations:  reconcile.external-secrets.io/data-hash: f445955da15f3ae1278448facb7667cf
+
+Type:  Opaque
+
+Data
+====
+password:  10 bytes
+username:  4 bytes
+
+$ kubectl get secrets otus-cred -o json | jq -r '.data'
+{
+  "password": "YXNhamtqa2Focw==",
+  "username": "b3R1cw=="
+}
+...
+
+Defaulted container "test" out of: test, vault-agent, vault-agent-init (init)
+data: map[password:asajkjkahs username:otus]
+metadata: map[created_time:2024-04-26T12:53:28.070451868Z custom_metadata:<nil> deletion_time: destroyed:false version:1]
+```
+
+---
+
+#### Список документации:
+
+* [What is Vault](https://developer.hashicorp.com/vault/tutorials/getting-started/getting-started-intro)
+* [Kubernetes auth method](https://developer.hashicorp.com/vault/docs/auth/kubernetes)
+* [HashiCorp Vault](https://external-secrets.io/latest/provider/hashicorp-vault/)
+* [Deploy service and endpoints to address an external Vault](https://developer.hashicorp.com/vault/tutorials/kubernetes/kubernetes-external-vault)
+
 ---
 
 ## <a name="kubernetes-csi">CSI. Обзор подсистем хранения данных в Kubernetes</a>
