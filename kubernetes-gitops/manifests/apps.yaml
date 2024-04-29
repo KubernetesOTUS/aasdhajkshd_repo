@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubernetes-networks
+spec:
+  destination:
+    name: in-cluster
+    namespace: homework
+    server: ''
+  source:
+    path: kubernetes-networks
+    repoURL: 'https://github.com/Kuber-2023-12OTUS/aasdhajkshd_repo.git'
+    targetRevision: HEAD
+  sources: []
+  project: otus
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubernetes-templating
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    name: in-cluster
+    namespace: homeworkhelm
+    server: ''
+  source:
+    path: kubernetes-templating/homework/charts/web
+    repoURL: 'https://github.com/Kuber-2023-12OTUS/aasdhajkshd_repo.git'
+    targetRevision: HEAD
+    helm:
+      valueFiles: []
+      values: ''
+      parameters:
+        - name: replicaCount
+          value: '2'
+  sources: []
+  project: otus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

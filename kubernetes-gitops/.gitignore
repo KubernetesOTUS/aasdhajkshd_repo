@@ -1,0 +1,3 @@
+# Ignore charts
+argo-cd/
+!argo-cd/values.yaml

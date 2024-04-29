@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: otus
+  namespace: argocd
+spec:
+  description: ''
+  sourceRepos:
+    - 'https://github.com/Kuber-2023-12OTUS/aasdhajkshd_repo.git'
+  destinations:
+    - namespace: '*'
+      name: in-cluster
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'

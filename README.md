@@ -22,6 +22,147 @@ aasdhajkshd repository
 * [Сервисы централизованного логирования для компонентов Kubernetes и приложений](#kubernetes-logging)
 * [CSI. Обзор подсистем хранения данных в Kubernetes](#kubernetes-csi)
 * [Хранилище секретов для приложений. Vault](#kubernetes-vault)
+* [GitOps и инструменты поставки](#kubernetes-gitops)
+
+---
+
+## <a name="kubernetes-gitops">GitOps и инструменты поставки</a>
+
+### ДЗ // GitOps и инструменты поставки
+
+#### Выполнение
+
+```bash
+kubectl taint nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) node-role=infra:NoSchedule
+kubectl label nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) workload=argocd
+kubectl label nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | head -n1) workload=production # чтобы приложение из network установилось
+  kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints,LABELS:.metadata.labels
+```
+
+Разметка узлов:
+
+```output
+NAME                        TAINTS                                               LABELS
+cl1l5bap1aj1ve73gt9u-afyf   <none>                                               map[...topology.kubernetes.io/zone:ru-central1-a workload=production]
+cl1l5bap1aj1ve73gt9u-erun   <none>                                               map[...topology.kubernetes.io/zone:ru-central1-a]
+cl1l5bap1aj1ve73gt9u-ocil   <none>                                               map[...topology.kubernetes.io/zone:ru-central1-a]
+cl1l5bap1aj1ve73gt9u-omyq   [map[effect:NoSchedule key:node-role value:infra]]   map[...topology.kubernetes.io/zone:ru-central1-a workload:argocd ...]
+```
+
+```bash
+helm pull oci://cr.yandex/yc-marketplace/yandex-cloud/argo/chart/argo-cd --version 5.46.8-6 --untar
+helm install --namespace argo --create-namespace argo-cd ./argo-cd/
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+Установка была выполнена с использованием _terraform_:
+
+```tf
+data.yandex_kubernetes_cluster.this: Reading...
+data.yandex_kubernetes_cluster.this: Read complete after 0s [id=cat0e4p2c14825kmt7o6]
+
+Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # helm_release.this will be created
+  + resource "helm_release" "this" {
+      + atomic                     = true
+      + chart                      = "argo-cd"
+      + cleanup_on_fail            = true
+      + create_namespace           = true
+      + dependency_update          = false
+      + disable_crd_hooks          = false
+      + disable_openapi_validation = false
+      + disable_webhooks           = false
+      + force_update               = false
+      + id                         = (known after apply)
+      + lint                       = false
+      + manifest                   = (known after apply)
+      + max_history                = 3
+      + metadata                   = (known after apply)
+      + name                       = "argocd"
+      + namespace                  = "argocd"
+      + pass_credentials           = false
+      + recreate_pods              = false
+      + render_subchart_notes      = true
+      + replace                    = false
+      + repository                 = "oci://cr.yandex/yc-marketplace/yandex-cloud/argo/chart"
+      + reset_values               = false
+      + reuse_values               = false
+      + skip_crds                  = false
+      + status                     = "deployed"
+      + timeout                    = 300
+      + values                     = []
+      + verify                     = false
+      + version                    = "5.46.8-6"
+      + wait                       = true
+      + wait_for_jobs              = false
+
+      + set {
+          + name  = "global.nodeSelector.workload"
+          + value = "argocd"
+            # (1 unchanged attribute hidden)
+        }
+      + set {
+          + name  = "global.tolerations[0].effect"
+          + value = "NoSchedule"
+            # (1 unchanged attribute hidden)
+        }
+      + set {
+          + name  = "global.tolerations[0].key"
+          + value = "node-role"
+            # (1 unchanged attribute hidden)
+        }
+      + set {
+          + name  = "global.tolerations[0].operator"
+          + value = "Equal"
+            # (1 unchanged attribute hidden)
+        }
+      + set {
+          + name  = "global.tolerations[0].value"
+          + value = "infra"
+            # (1 unchanged attribute hidden)
+        }
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + argocd_version               = (known after apply)
+  + chart_version                = (known after apply)
+  + helm_revision                = (known after apply)
+helm_release.this: Creating...
+helm_release.this: Still creating... [10s elapsed]
+helm_release.this: Still creating... [20s elapsed]
+helm_release.this: Still creating... [30s elapsed]
+helm_release.this: Creation complete after 31s [id=argocd]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+argocd_version = "v2.8.4"
+chart_version = "5.46.8-6"
+cluster_external_v4_endpoint = "https://158.160.36.230"
+helm_revision = 1
+```
+
+```bash
+kubectl get secret -n argocd argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+![Reference](/images/Screenshot_20240429_234800.png)
+
+---
+
+#### Список документации:
+
+* [terraform-yc-modules / terraform-yc-kubernetes](https://github.com/terraform-yc-modules/terraform-yc-kubernetes/tree/master)
+* [ArgoCD deployment by Terraform](https://github.com/adv4000/argocd-terraform.git)
+* [ArgoCD Applications per EKS Cluster](https://github.com/adv4000/argocd)
+* [Установка Jenkins с помощью terraform в Kubernetes в Yandex Cloud с letsencypt](https://habr.com/ru/articles/683844/)
 
 ---
 
@@ -256,7 +397,7 @@ csi-s3-pvc   Bound    pvc-74261ccf-1a83-4169-9dc0-5954b03f60a4   5Gi        RWX 
 
 #### Список документации:
 
-- [CSI for S3](https://github.com/yandex-cloud/k8s-csi-s3)
+* [CSI for S3](https://github.com/yandex-cloud/k8s-csi-s3)
 
 ---
 
