@@ -1,0 +1,36 @@
+---
+- name: Upgrade K8s
+  hosts: masters, workers
+  vars:
+    ssh_user: ubuntu
+    kubernetes_version: "1.30"
+    kubernetes_apt_gpg: "/etc/apt/trusted.gpg.d/k8s.gpg"
+    kubernetes_apt_repository: "deb [signed-by={{ kubernetes_apt_gpg }}] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+    kubernetes_apt_ignore_key_error: false
+    kubernetes_apt_repository_key: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+    drain_timeout: "360s"
+    drain_grace_period: 300
+  become: true
+  gather_facts: true
+  remote_user: "{{ ssh_user }}"
+  serial: 1
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  tasks:
+    - name: Restart kubelet service
+      become: true
+      systemd:
+        name: kubelet
+        state: restarted
+        enabled: true
+        daemon-reload: true
+      register: kubelet_service
+      until: kubelet_service.status.ActiveState == "active"
+      retries: 3
+      delay: 10
+
+    - name: Uncordon node
+      command: >-
+        kubectl uncordon
+        {{ ansible_hostname | default(inventory_hostname) }}
+      delegate_to: "{{ groups['masters'][0] }}"
+      changed_when: false

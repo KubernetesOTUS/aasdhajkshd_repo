@@ -1,0 +1,4 @@
+---
+- name: Kubernetes version
+  become: false
+  command: kubectl version

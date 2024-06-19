@@ -1,0 +1,11 @@
+- name: Run K8s prepare and install
+  ansible.builtin.import_playbook: k8s_install.yml
+
+- name: Run K8s kubeadm setup
+  ansible.builtin.import_playbook: k8s_configure.yml
+
+- name: Run K8s cluster checks
+  ansible.builtin.import_playbook: k8s_check.yml
+
+- name: Import Deployment test
+  ansible.builtin.import_playbook: k8s_test.yml

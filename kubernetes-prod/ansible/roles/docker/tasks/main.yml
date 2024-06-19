@@ -1,0 +1,91 @@
+---
+- name: Wait for system to become reachable
+  wait_for_connection:
+
+- name: Gather facts for the first time
+  setup:
+
+- fail:
+    msg: "OS should be Ubuntu {{ required_os_version }}, not {{ ansible_distribution }} {{ ansible_distribution_version }}"
+  when: ansible_distribution != 'Ubuntu' or ansible_distribution_version != '20.04'
+
+- name: Install dependencies
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: true
+    update_cache_retries: 3
+    install_recommends: false
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - wget
+    - gnupg
+    - net-tools
+    - bridge-utils
+    - vim
+    - jq
+
+- name: Add GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+    keyring: /etc/apt/trusted.gpg.d/docker.gpg
+
+- name: Add docker repository to apt
+  apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu {{ os_version_codename }} stable
+    state: present
+    filename: 'docker'
+
+- name: Install docker
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: true
+  loop:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+
+- name: Creating a file with content
+  become: true
+  copy:
+    dest: "/etc/docker/daemon.json"
+    content: |
+      {
+        "exec-opts": ["native.cgroupdriver=systemd"]
+      }
+  notify: Reload docker service
+
+- name: Check docker is active
+  service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Ensure group "docker" exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Adding ubuntu to docker group
+  user:
+    name: "{{ ssh_user }}"
+    groups: docker
+    append: yes
+
+- name: Install docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: 'u+rwx,g+rx'
+  notify: Docker Compose Standalone version
+
+- name: Change file ownership, group and permissions
+  ansible.builtin.file:
+    path: /usr/local/bin/docker-compose
+    owner: "{{ ssh_user }}"
+    group: docker
+    mode: "0755"

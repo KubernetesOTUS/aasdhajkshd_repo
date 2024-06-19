@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod
+  labels:
+    component: homework
+    app: pod
+  namespace: default
+spec:
+  containers:
+  - name: pod
+    image: alpine:latest
+    imagePullPolicy: IfNotPresent
+    command:
+      - /bin/sh
+      - "-c"
+      - "sleep 60m"
+    lifecycle:
+      postStart:
+        exec:
+          command: ["sh", "-c", "apk update && apk add bash curl wget jq kubectl helm inetutils-telnet rsync ansible ansible-lint yamllint golangci-lint gitlint jq yq openssl"]
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "1000m"
+  restartPolicy: Always

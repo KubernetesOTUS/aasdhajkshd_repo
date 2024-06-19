@@ -1,0 +1,8 @@
+---
+ssh_user: ubuntu
+env: local
+kubernetes_apt_gpg: "/etc/apt/trusted.gpg.d/k8s.gpg"
+kubernetes_apt_repository: "deb [signed-by={{ kubernetes_apt_gpg }}] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+kubernetes_apt_ignore_key_error: false
+kubernetes_apt_repository_key: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+kubelet_extra_args: "/etc/default/kubelet"

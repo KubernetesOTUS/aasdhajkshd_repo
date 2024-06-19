@@ -1,0 +1,9 @@
+---
+- name: Docker Compose Standalone version
+  become: false
+  command: /usr/local/bin/docker-compose version
+- name: Reload docker service
+  become: true
+  service:
+    name: docker
+    state: reloaded

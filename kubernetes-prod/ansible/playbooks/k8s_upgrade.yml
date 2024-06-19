@@ -1,0 +1,170 @@
+---
+- name: Upgrade K8s
+  hosts: masters, workers
+  vars:
+    ssh_user: ubuntu
+    kubernetes_version: "1.30"
+    kubernetes_apt_gpg: "/etc/apt/trusted.gpg.d/k8s.gpg"
+    kubernetes_apt_repository: "deb [signed-by={{ kubernetes_apt_gpg }}] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+    kubernetes_apt_ignore_key_error: false
+    kubernetes_apt_repository_key: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+    drain_timeout: "360s"
+    drain_grace_period: 300
+  become: true
+  gather_facts: true
+  remote_user: "{{ ssh_user }}"
+  serial: 1
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  tasks:
+    - name: Add Kubernetes APT key
+      apt_key:
+        url: "{{ kubernetes_apt_repository_key }}"
+        state: present
+        keyring: "{{ kubernetes_apt_gpg }}"
+
+    - name: Add Kubernetes APT repository
+      apt_repository:
+        repo: "{{ kubernetes_apt_repository }}"
+        state: present
+        filename: 'kubernetes'
+
+    - name: Verify the upgrade plan
+      shell: kubeadm upgrade plan
+      register: kubeadm_plan
+      delegate_to: "{{ groups['masters'][0] }}"
+      changed_when: false
+
+    - name: Unhold kubernetes packages
+      with_items: ['kubelet', 'kubeadm', 'kubectl']
+      dpkg_selections:
+        name: '{{ item }}'
+        selection: install
+
+    - name: Waiting the cancel
+      ansible.builtin.pause:
+        minutes: 1
+
+    - name: Upgrading kubernetes
+      become: true
+      apt:
+        name:
+          - kubeadm={{ kubernetes_version }}.*
+          - kubectl={{ kubernetes_version }}.*
+          - kubelet={{ kubernetes_version }}.*
+        state: present
+
+    - name: Prevent kubernetes from being upgraded
+      with_items: ['kubelet', 'kubeadm', 'kubectl']
+      dpkg_selections:
+        name: '{{ item }}'
+        selection: hold
+
+    - name: Get kubeadm version
+      command: kubeadm version -o short
+      register: kubeadm_version
+      changed_when: false
+
+    - name: Upgrade
+      shell: kubeadm upgrade apply {{ kubeadm_version.stdout }} --yes
+      register: kubeadm_upgrade
+      delegate_to: "{{ groups['masters'][0] }}"
+      changed_when: false
+    # - debug: msg="{{ kubeadm_upgrade.stdout }}"
+
+    - name: Get kubernetes details
+      become: false
+      command: >-
+        kubectl get node
+        {{ ansible_hostname | default(inventory_hostname) }}
+        -o json
+      register: kubectl_get_node
+      delegate_to: "{{ groups['masters'][0] }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Prepare for an update nodes
+      become: false
+      when:
+        # When status.conditions[x].type == Ready then check stats.conditions[x].status for True|False
+        - kubectl_get_node['stdout'] | from_json | json_query("status.conditions[?type == 'Ready'].status")
+        # If spec.unschedulable is defined then the node is cordoned
+        - not (kubectl_get_node['stdout'] | from_json).spec.unschedulable is defined
+      block:
+        - name: Cordon node
+          command: >-
+            kubectl cordon
+            {{ ansible_hostname | default(inventory_hostname) }}
+          delegate_to: "{{ groups['masters'][0] }}"
+          changed_when: false
+
+        - name: Wait for node to cordon
+          command: >-
+            kubectl get node
+            {{ ansible_hostname | default(inventory_hostname) }}
+            -o json
+          register: wait_for_cordon
+          retries: 10
+          delay: 10
+          delegate_to: "{{ groups['masters'][0] }}"
+          changed_when: false
+          until: (wait_for_cordon['stdout'] | from_json).spec.unschedulable
+
+        - name: Drain node
+          command: >-
+            kubectl drain
+            --force
+            --ignore-daemonsets
+            --grace-period {{ drain_grace_period }}
+            --timeout {{ drain_timeout }}
+            --delete-emptydir-data {{ ansible_hostname | default(inventory_hostname) }}
+          delegate_to: "{{ groups['masters'][0] }}"
+          changed_when: false
+
+        - name: Update all packages
+          become: true
+          apt:
+            upgrade: dist
+            update_cache: true
+            force_apt_get: true
+
+        - name: Check if reboot is required
+          stat:
+            path: /var/run/reboot-required
+          register: reboot_required
+
+        - name: Reboot the server
+          reboot:
+            post_reboot_delay: 30
+          when: reboot_required.stat.exists
+
+        - name: Restart kubelet service
+          become: true
+          systemd:
+            name: kubelet
+            state: restarted
+            enabled: true
+            daemon-reload: true
+          register: kubelet_service
+          until: kubelet_service.status.ActiveState == "active"
+          when: not reboot_required.stat.exists
+
+        - name: Uncordon node
+          command: >-
+            kubectl uncordon
+            {{ ansible_hostname | default(inventory_hostname) }}
+          delegate_to: "{{ groups['masters'][0] }}"
+          changed_when: false
+          retries: 3
+          delay: 10
+
+        - name: Wait for node to uncordon
+          command: >-
+            kubectl get node
+            {{ ansible_hostname | default(inventory_hostname) }}
+            -o json
+          register: wait_for_uncordon
+          retries: 10
+          delay: 10
+          delegate_to: "{{ groups['masters'][0] }}"
+          changed_when: false
+          until: not (kubectl_get_node['stdout'] | from_json).spec.unschedulable is defined
