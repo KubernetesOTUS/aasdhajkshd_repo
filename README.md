@@ -23,6 +23,160 @@ aasdhajkshd repository
 * [CSI. Обзор подсистем хранения данных в Kubernetes](#kubernetes-csi)
 * [Хранилище секретов для приложений. Vault](#kubernetes-vault)
 * [GitOps и инструменты поставки](#kubernetes-gitops)
+* [Подходы к развертыванию и обновлению production-grade кластера](#kubernetes-prod)
+
+---
+
+## <a name="kubernetes-prod">Подходы к развертыванию и обновлению production-grade кластера</a>
+
+### ДЗ // Создание и обновление кластера при помощи kubeadm
+
+#### Выполнение
+
+Необходимо внести изменения в настройки `kubernetes-prod/terraform/stage/terraform.tfvars` для YC.
+
+Например, ключ для доступа к _folder_ YC
+
+```bash
+yc iam access-key create --service-account-name sa-otus-kuber-repo-tf --output .secrets/sa.json
+```
+
+Создание кластера с использоавнием terraform и ansible ()
+
+```bash
+terraform -chdir=terraform/stage/ apply -auto-approve
+```
+
+**Результаты выполнения в `kubernetes-prod/README.md`**
+
+```output
+null_resource.run_ansible (local-exec): NAME                   STATUS     ROLES           AGE    VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+null_resource.run_ansible (local-exec): fhm5tub66ct0p545llq7   NotReady   <none>          6s     v1.29.6   192.168.99.16   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+null_resource.run_ansible (local-exec): fhmp3j4sp3aki3njfd23   Ready      control-plane   2m7s   v1.29.6   192.168.99.17   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+null_resource.run_ansible (local-exec): fhms3ck7p68bont19jk5   NotReady   <none>          15s    v1.29.6   192.168.99.32   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+null_resource.run_ansible (local-exec): fhmt1bh2p955d0f1f72a   NotReady   <none>          14s    v1.29.6   192.168.99.24   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+
+```
+
+Обновление kubernetes
+
+```bash
+$ export KUBECONFIG=kubeadm/.secrets/kube-k8s-master-0.conf
+$ ansible-playbook -v -T 300 -i environments/stage/inventory.json playbooks/k8s_upgrade.yml
+$ kubectl get nodes -o wide
+NAME                   STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+fhm5tub66ct0p545llq7   Ready    <none>          12m   v1.29.6   192.168.99.16   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhmp3j4sp3aki3njfd23   Ready    control-plane   14m   v1.30.2   192.168.99.17   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhms3ck7p68bont19jk5   Ready    <none>          12m   v1.30.2   192.168.99.32   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhmt1bh2p955d0f1f72a   Ready    <none>          12m   v1.29.6   192.168.99.24   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+```
+
+Результат:
+
+```bash
+$ kubectl get nodes -o wide
+NAME                   STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+fhm5tub66ct0p545llq7   Ready    <none>          29m   v1.30.2   192.168.99.16   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhmp3j4sp3aki3njfd23   Ready    control-plane   31m   v1.30.2   192.168.99.17   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhms3ck7p68bont19jk5   Ready    <none>          29m   v1.30.2   192.168.99.32   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+fhmt1bh2p955d0f1f72a   Ready    <none>          29m   v1.30.2   192.168.99.24   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.6.33
+```
+
+В процессе обновления, можно наблюдать, как deployment test pod'ы терминируются при применении _drain_ команды, запуск на другом третьем узле. Здесь не рассматривался вариант, когда приложение работает без перерыва связи. Но для понимания, как выполняется "переезд". В зависимости от этого и реализуется стратегия. Здесь же концептуальный подход к процедуре повышения версии.
+
+```bash
+$ kubectl get pods -o wide
+NAME                    READY   STATUS        RESTARTS   AGE   IP               NODE                   NOMINATED NODE   READINESS GATES
+test-566dbfbbc4-hqlxp   1/1     Running       0          20s   10.244.246.74    fhm5tub66ct0p545llq7   <none>           <none>
+test-566dbfbbc4-vqdsp   1/1     Terminating   0          38m   10.244.152.198   fhms3ck7p68bont19jk5   <none>           <none>
+```
+
+#### Задание с *
+
+Для выполнения установки **kubespray** необходимо закомментировать _resource "null_resource" "run_ansible"_ в `kubernetes-prod/terraform/stage/resources.tf`, чтобы потом можно было после создания виртуальных машин вручную запустить выполнение ansible для kubespray.
+
+```terraform
+resource "local_file" "kubespray_inventory" {
+  content = templatefile("${path.module}/templates/kubespray.ini.tpl",
+  {
+    master_ips = module.kubernetes.master_ip_address
+    master_ids = module.kubernetes.master_instance[0]
+    worker_ips = module.kubernetes.worker_ip_address
+    worker_ids = module.kubernetes.worker_instance[0]
+    node_ips = concat(module.kubernetes.master_ip_address, module.kubernetes.worker_ip_address)
+  })
+  filename = "../../kubespray/inventory/local/inventory.ini"
+}
+```
+
+Для указания новых параметров количества и характеристик виртуальныхмашин для kubernetes кластера, изменения необходимы в `kubernetes-prod/terraform/modules/kubernetes/variables.tf`
+
+После установки виртуальных машин и сформированного _terraform_'ом `kubespray/inventory/local/inventory.ini` требуется для `ansible` версии ниже 2.17.0.
+
+```bash
+git clone https://github.com/kubernetes-sigs/kubespray.git
+python3 -m venv .venv
+python3 -m pip install ansible ansible-core==2.16.8
+python3 -m pip install -r requirements.txt
+ansible-playbook -i inventory/local/inventory.ini --become --become-user=root cluster.yml
+```
+
+Вывод команды `kubectl get nodes –o wide`
+
+```bash
+$ ssh -l ubuntu -i ~/.ssh/id_rsa-appuser 158.160.97.146 kubectl get nodes -o wide
+NAME                   STATUS   ROLES           AGE    VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+fhm1q990n3ve0rlv7q48   Ready    <none>          22m    v1.29.5   192.168.99.29   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+fhm23nh49uft58qu43qa   Ready    control-plane   102m   v1.29.5   192.168.99.27   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+fhm4jldk6ls9qm2tclqm   Ready    <none>          22m    v1.29.5   192.168.99.14   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+fhmav03g08hr6feh31au   Ready    <none>          22m    v1.29.5   192.168.99.35   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+fhmibjl39dmiukfvfsd4   Ready    control-plane   122m   v1.29.5   192.168.99.20   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+fhms56jfu94iaefdph12   Ready    control-plane   101m   v1.29.5   192.168.99.33   <none>        Ubuntu 20.04.6 LTS   5.4.0-186-generic   containerd://1.7.16
+$ ssh -l ubuntu -i ~/.ssh/id_rsa-appuser 158.160.97.146 kubectl get pods -A -o wide
+NAMESPACE     NAME                                           READY   STATUS    RESTARTS       AGE    IP              NODE                   NOMINATED NODE   READINESS GATES
+kube-system   calico-kube-controllers-68485cbf9c-jbvcb       1/1     Running   0              19m    10.233.79.1     fhm1q990n3ve0rlv7q48   <none>           <none>
+kube-system   calico-node-2q5mn                              1/1     Running   0              20m    192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   calico-node-7ms9h                              1/1     Running   0              20m    192.168.99.14   fhm4jldk6ls9qm2tclqm   <none>           <none>
+kube-system   calico-node-9qptt                              1/1     Running   0              20m    192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   calico-node-dbf2f                              1/1     Running   0              20m    192.168.99.29   fhm1q990n3ve0rlv7q48   <none>           <none>
+kube-system   calico-node-k86jp                              1/1     Running   0              20m    192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+kube-system   calico-node-mrqw8                              1/1     Running   0              20m    192.168.99.35   fhmav03g08hr6feh31au   <none>           <none>
+kube-system   coredns-69db55dd76-b49fg                       1/1     Running   0              17m    10.233.79.65    fhms56jfu94iaefdph12   <none>           <none>
+kube-system   coredns-69db55dd76-tq9mh                       1/1     Running   0              17m    10.233.74.2     fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   dns-autoscaler-6f4b597d8c-plx7t                1/1     Running   0              17m    10.233.74.1     fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   kube-apiserver-fhm23nh49uft58qu43qa            1/1     Running   0              102m   192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   kube-apiserver-fhmibjl39dmiukfvfsd4            1/1     Running   2              122m   192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+kube-system   kube-apiserver-fhms56jfu94iaefdph12            1/1     Running   0              102m   192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   kube-controller-manager-fhm23nh49uft58qu43qa   1/1     Running   1              102m   192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   kube-controller-manager-fhmibjl39dmiukfvfsd4   1/1     Running   2              122m   192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+kube-system   kube-controller-manager-fhms56jfu94iaefdph12   1/1     Running   1              102m   192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   kube-proxy-7x88q                               1/1     Running   0              22m    192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   kube-proxy-c9v7h                               1/1     Running   0              22m    192.168.99.14   fhm4jldk6ls9qm2tclqm   <none>           <none>
+kube-system   kube-proxy-g6rtv                               1/1     Running   0              22m    192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+kube-system   kube-proxy-qgxz4                               1/1     Running   0              22m    192.168.99.35   fhmav03g08hr6feh31au   <none>           <none>
+kube-system   kube-proxy-thpsk                               1/1     Running   0              22m    192.168.99.29   fhm1q990n3ve0rlv7q48   <none>           <none>
+kube-system   kube-proxy-v7sg7                               1/1     Running   0              22m    192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   kube-scheduler-fhm23nh49uft58qu43qa            1/1     Running   2 (101m ago)   102m   192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   kube-scheduler-fhmibjl39dmiukfvfsd4            1/1     Running   1              122m   192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+kube-system   kube-scheduler-fhms56jfu94iaefdph12            1/1     Running   1              102m   192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   nginx-proxy-fhm1q990n3ve0rlv7q48               1/1     Running   0              22m    192.168.99.29   fhm1q990n3ve0rlv7q48   <none>           <none>
+kube-system   nginx-proxy-fhm4jldk6ls9qm2tclqm               1/1     Running   0              22m    192.168.99.14   fhm4jldk6ls9qm2tclqm   <none>           <none>
+kube-system   nginx-proxy-fhmav03g08hr6feh31au               1/1     Running   0              22m    192.168.99.35   fhmav03g08hr6feh31au   <none>           <none>
+kube-system   nodelocaldns-6ttt7                             1/1     Running   0              17m    192.168.99.33   fhms56jfu94iaefdph12   <none>           <none>
+kube-system   nodelocaldns-8dwlf                             1/1     Running   0              17m    192.168.99.35   fhmav03g08hr6feh31au   <none>           <none>
+kube-system   nodelocaldns-bbjn9                             1/1     Running   0              17m    192.168.99.27   fhm23nh49uft58qu43qa   <none>           <none>
+kube-system   nodelocaldns-kvkzq                             1/1     Running   0              17m    192.168.99.29   fhm1q990n3ve0rlv7q48   <none>           <none>
+kube-system   nodelocaldns-nf44g                             1/1     Running   0              17m    192.168.99.14   fhm4jldk6ls9qm2tclqm   <none>           <none>
+kube-system   nodelocaldns-xl496                             1/1     Running   0              17m    192.168.99.20   fhmibjl39dmiukfvfsd4   <none>           <none>
+
+```
+
+---
+
+#### Список документации:
+
+* [Automating System Updates for Kubernetes Clusters using Ansible](https://itnext.io/automating-system-updates-for-kubernetes-clusters-using-ansible-94a70f4e1972)
+* [Install packages in a virtual environment using pip and venv](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
 
 ---
 
@@ -36,7 +190,7 @@ aasdhajkshd repository
 kubectl taint nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) node-role=infra:NoSchedule
 kubectl label nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | tail -n1) workload=argocd
 kubectl label nodes --overwrite=true $(kubectl get nodes -o name | cut -f2 -d'/' | head -n1) workload=production # чтобы приложение из network установилось
-  kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints,LABELS:.metadata.labels
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints,LABELS:.metadata.labels
 ```
 
 Разметка узлов:
