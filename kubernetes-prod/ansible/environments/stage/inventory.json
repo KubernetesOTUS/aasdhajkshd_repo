@@ -1,0 +1,34 @@
+{
+  "masters": {
+    "hosts": {
+      "k8s-master-0" : {
+        "ansible_host": "158.160.97.146",
+        "ansible_hostname": "fhmibjl39dmiukfvfsd4"
+      },
+      "k8s-master-1" : {
+        "ansible_host": "158.160.125.52",
+        "ansible_hostname": "fhm23nh49uft58qu43qa"
+      },
+      "k8s-master-2" : {
+        "ansible_host": "158.160.58.198",
+        "ansible_hostname": "fhms56jfu94iaefdph12"
+      }
+    }
+  },
+  "workers": {
+    "hosts": {
+      "k8s-worker-0" : {
+        "ansible_host": "158.160.114.161",
+        "ansible_hostname": "fhmav03g08hr6feh31au"
+      },
+      "k8s-worker-1" : {
+        "ansible_host": "158.160.56.235",
+        "ansible_hostname": "fhm1q990n3ve0rlv7q48"
+      },
+      "k8s-worker-2" : {
+        "ansible_host": "51.250.14.40",
+        "ansible_hostname": "fhm4jldk6ls9qm2tclqm"
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+galaxy_info:
+  author: AAsdhajkshD
+  description: OTUS training
+  company: AUXO
+  license: GPL-2.0-or-later
+  min_ansible_version: 2.15.2
+  github_branch: kubernetes-prod
+  galaxy_tags: [docker,kubernetes]
+dependencies:
+  - role: docker

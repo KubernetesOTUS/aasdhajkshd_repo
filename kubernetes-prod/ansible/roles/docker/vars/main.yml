@@ -1,0 +1,4 @@
+---
+os_version_codename: focal
+required_os_version: 20.04
+docker_compose_version: 2.20.3

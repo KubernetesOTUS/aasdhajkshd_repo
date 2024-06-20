@@ -1,0 +1,73 @@
+---
+- name: Run checks on k8s
+  hosts: masters
+  vars:
+    ssh_user: ubuntu
+  become: false
+  gather_facts: false
+  remote_user: "{{ ssh_user }}"
+  tasks:
+    - name: Get nodes
+      shell: kubectl get nodes -o wide
+      register: nodes_status
+      changed_when: false
+
+    - debug:
+        msg: |
+          {% for item in nodes_status.stdout_lines -%}
+          {{ item }}
+          {% endfor %}
+
+    - name: Waiting for pods to finish start
+      ansible.builtin.pause:
+        minutes: 1
+
+    - name: Get pods
+      shell: kubectl get pods --all-namespaces -o wide
+      register: pods_status
+      changed_when: false
+
+    - debug:
+        msg: |
+          {% for item in pods_status.stdout_lines -%}
+          {{ item }}Commands should not change things if nothing needs doing.ansible-lintno-changed-when
+          {% endfor %}
+
+    - name: Check cluster
+      command: "{{ item }}"
+      register: cluster_status
+      with_items:
+        - kubectl config view
+        - kubectl describe node
+      changed_when: false
+
+    - debug:
+        msg: "{{ item.stdout_lines | join('\n') }}"
+      with_items: "{{ cluster_status.results }}"
+
+    - name: Check if Python 3.9 interpreter exists
+      stat:
+        path: /usr/bin/python3.9
+      register: python_interpreter
+
+    - name: Set ansible_python_interpreter if Python 3.9 exists
+      set_fact:
+        ansible_python_interpreter: /usr/bin/python3.9
+      when: python_interpreter.stat.exists
+
+    - name: Get Cluster information
+      when: python_interpreter.stat.exists
+      kubernetes.core.k8s_cluster_info:
+      register: api_status
+
+    - name: Do not invalidate cache before getting information
+      when: python_interpreter.stat.exists
+      kubernetes.core.k8s_cluster_info:
+        invalidate_cache: false
+      register: api_status
+
+    - name: Fetching config of kube
+      ansible.builtin.fetch:
+        src: "/home/{{ ssh_user }}/.kube/config"
+        dest: "$HOME/.kube/config.{{ inventory_hostname }}"
+        flat: true

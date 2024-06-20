@@ -1,0 +1,67 @@
+---
+- name: Setup some on k8s
+  hosts: masters
+  vars:
+    ssh_user: ubuntu
+    test_file: "/home/{{ ssh_user }}/test.yaml"
+  become: false
+  gather_facts: false
+  remote_user: "{{ ssh_user }}"
+  tasks:
+    - name: Create test pod file
+      copy:
+        dest: "{{ test_file }}"
+        content: |
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: test
+            labels:
+              component: homework
+              app: test
+            namespace: default
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: test
+            template:
+              metadata:
+                labels:
+                  app: test
+              spec:
+                containers:
+                - name: test
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  command:
+                    - /bin/sh
+                    - "-c"
+                    - "sleep 60m"
+                  lifecycle:
+                    postStart:
+                      exec:
+                        command:
+                          - "sh"
+                          - "-c"
+                          - "apk update"
+                          - "apk add bash curl wget jq kubectl helm inetutils-telnet rsync ansible ansible-lint yamllint golangci-lint gitlint jq yq openssl"
+                  resources:
+                    limits:
+                      memory: "256Mi"
+                      cpu: "1000m"
+                restartPolicy: Always
+        mode: '0644'
+
+    - name: K8s setup
+      command: "{{ item }}"
+      register: kubectl_exec
+      with_items:
+        - kubectl apply -f "{{ test_file }}"
+      failed_when: kubectl_exec.rc != 0
+      changed_when: false
+
+    - debug:
+        msg: "{{ item.stdout_lines | join('\n') }}"
+      with_items: "{{ kubectl_exec.results }}"

@@ -1,0 +1,24 @@
+---
+exclude_paths:
+  - .cache/
+  - .git/
+  - molecule/
+skip_list:
+  - command-instead-of-shell
+  - command-instead-of-module
+  - git-latest
+  - no-handler
+  - package-latest
+  - empty-string-compare
+  - command-instead-of-shell
+  - meta-no-info
+  - no-relative-paths
+  - risky-shell-pipe
+  - role-name
+  - unnamed-task
+  - fqcn[action-core]
+  - no-free-form
+  - jinja[invalid]
+  - args[module]
+  - fqcn[action]
+#  - syntax-check[specific]
