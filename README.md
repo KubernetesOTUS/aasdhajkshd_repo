@@ -24,6 +24,225 @@ aasdhajkshd repository
 * [Хранилище секретов для приложений. Vault](#kubernetes-vault)
 * [GitOps и инструменты поставки](#kubernetes-gitops)
 * [Подходы к развертыванию и обновлению production-grade кластера](#kubernetes-prod)
+* [Диагностика и отладка в Kubernetes](#kubernetes-debug)
+
+---
+
+
+## <a name="kubernetes-debug">Диагностика и отладка в Kubernetes</a>
+
+### ДЗ // Производить отладку контейнеров и нод Kubernetes с помощью эфемерных контейнеров и kubectl debug
+
+#### Выполнение
+
+Получение доступа `kubectl exec -it -n default deployments/nginx-distroless -- sh` к _distroless_ контейнеру:
+
+```bash
+OCI runtime exec failed: exec failed: unable to start container process: exec: "sh": executable file not found in $PATH: unknown
+command terminated with exit code 126
+```
+
+Добавление эфемерныго контейнера:
+
+```bash
+POD_NAME=$(kubectl get pods -l app=nginx -o jsonpath='{.items[0].metadata.name}')
+kubectl debug -it --attach=false -c ${POD_NAME}-debugger --image=ubuntu ${POD_NAME}
+kubectl attach -it -c debugger ${POD_NAME}-test
+kubectl get pod ${POD_NAME} -o json | jq -r '.status.ephemeralContainerStatuses'
+kubectl get pod ${POD_NAME} -o json | jq -r '.spec.ephemeralContainers'
+```
+
+Получение доступа к процессам из `debug` контейнера:
+
+```bash
+POD_NAME=$(kubectl get pods -l app=nginx -o jsonpath='{.items[0].metadata.name}')
+kubectl debug -it --attach=true --image=ubuntu ${POD_NAME} -c nginx-distroless-debugger --copy-to nginx-distroless-${POD_NAME}-test --share-processes --tty=true -- /bin/bash
+```
+
+Результат выполнения различных команд:
+
+```output
+If you don't see a command prompt, try pressing enter.
+root@nginx-distroless-65cfd466bd-xkd7x-test:/# ps aux --forest
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root          14  0.0  0.0   4588  3712 pts/0    Ss   17:38   0:00 /bin/bash
+root         952  0.0  0.0   7888  4096 pts/0    R+   18:34   0:00  \_ ps aux --forest
+root           7  0.0  0.0  10812  6016 ?        Ss   17:38   0:00 nginx: master process nginx -g daemon off;
+tcpdump       13  0.0  0.0  11204  3004 ?        S    17:38   0:00  \_ nginx: worker process
+65535          1  0.0  0.0   1028   640 ?        Ss   17:38   0:00 /pause
+
+root@nginx-distroless-65cfd466bd-xkd7x-test:/# ls -Al /proc/$(pgrep nginx | head -n1)/root/etc/nginx/
+total 40
+drwxr-xr-x 2 root root 4096 Oct  5  2020 conf.d
+-rw-r--r-- 1 root root 1007 Apr 21  2020 fastcgi_params
+-rw-r--r-- 1 root root 2837 Apr 21  2020 koi-utf
+-rw-r--r-- 1 root root 2223 Apr 21  2020 koi-win
+-rw-r--r-- 1 root root 5231 Apr 21  2020 mime.types
+lrwxrwxrwx 1 root root   22 Apr 21  2020 modules -> /usr/lib/nginx/modules
+-rw-r--r-- 1 root root  643 Apr 21  2020 nginx.conf
+-rw-r--r-- 1 root root  636 Apr 21  2020 scgi_params
+-rw-r--r-- 1 root root  664 Apr 21  2020 uwsgi_params
+-rw-r--r-- 1 root root 3610 Apr 21  2020 win-utf
+root@nginx-distroless-65cfd466bd-xkd7x-test:/# apt update && apt install -y mc strace tcpdump
+...
+root@nginx-distroless-65cfd466bd-xkd7x-test:/# tcpdump -nn -i any -e port 80
+tcpdump: data link type LINUX_SLL2
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+
+14:47:52.857259 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.34604 > 127.0.0.1.80: Flags [S], seq 3821589659, win 33280, options [mss 65495,sackOK,TS val 1571353223 ecr 0,nop,wscale 7], length 0
+14:47:52.857285 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.80 > 127.0.0.1.34604: Flags [S.], seq 139964721, ack 3821589660, win 33280, options [mss 65495,sackOK,TS val 1571353223 ecr 1571353223,nop,wscale 7], length 0
+14:47:52.857312 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.34604 > 127.0.0.1.80: Flags [.], ack 1, win 260, options [nop,nop,TS val 1571353223 ecr 1571353223], length 0
+
+14:48:00.838699 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.43114 > 127.0.0.1.80: Flags [S], seq 4200543795, win 33280, options [mss 65495,sackOK,TS val 1571361204 ecr 0,nop,wscale 7], length 0
+14:48:00.838714 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.80 > 127.0.0.1.43114: Flags [S.], seq 1641929663, ack 4200543796, win 33280, options [mss 65495,sackOK,TS val 1571361204 ecr 1571361204,nop,wscale 7], length 0
+14:48:00.838727 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.43114 > 127.0.0.1.80: Flags [.], ack 1, win 260, options [nop,nop,TS val 1571361204 ecr 1571361204], length 0
+14:48:00.839186 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.43128 > 127.0.0.1.80: Flags [S], seq 1666333252, win 33280, options [mss 65495,sackOK,TS val 1571361205 ecr 0,nop,wscale 7], length 0
+14:48:00.839198 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 80: 127.0.0.1.80 > 127.0.0.1.43128: Flags [S.], seq 3967951248, ack 1666333253, win 33280, options [mss 65495,sackOK,TS val 1571361205 ecr 1571361205,nop,wscale 7], length 0
+14:48:00.839209 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.43128 > 127.0.0.1.80: Flags [.], ack 1, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 0
+14:48:00.839261 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 1461: 127.0.0.1.43128 > 127.0.0.1.80: Flags [P.], seq 1:1390, ack 1, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 1389: HTTP: GET / HTTP/1.1
+14:48:00.839269 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.80 > 127.0.0.1.43128: Flags [.], ack 1390, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 0
+14:48:00.839394 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 310: 127.0.0.1.80 > 127.0.0.1.43128: Flags [P.], seq 1:239, ack 1390, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 238: HTTP: HTTP/1.1 200 OK
+14:48:00.839402 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.43128 > 127.0.0.1.80: Flags [.], ack 239, win 259, options [nop,nop,TS val 1571361205 ecr 1571361205], length 0
+14:48:00.839428 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 684: 127.0.0.1.80 > 127.0.0.1.43128: Flags [P.], seq 239:851, ack 1390, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 612: HTTP
+14:48:00.839432 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.43128 > 127.0.0.1.80: Flags [.], ack 851, win 260, options [nop,nop,TS val 1571361205 ecr 1571361205], length 0
+14:48:01.038814 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 1387: 127.0.0.1.43128 > 127.0.0.1.80: Flags [P.], seq 1390:2705, ack 851, win 260, options [nop,nop,TS val 1571361404 ecr 1571361205], length 1315: HTTP: GET /favicon.ico HTTP/1.1
+14:48:01.038945 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 782: 127.0.0.1.80 > 127.0.0.1.43128: Flags [P.], seq 851:1561, ack 2705, win 260, options [nop,nop,TS val 1571361404 ecr 1571361404], length 710: HTTP: HTTP/1.1 404 Not Found
+14:48:01.038952 lo    In  ifindex 1 00:00:00:00:00:00 ethertype IPv4 (0x0800), length 72: 127.0.0.1.43128 > 127.0.0.1.80: Flags [.], ack 1561, win 260, options [nop,nop,TS val 1571361404 ecr 1571361404], length 0
+```
+
+Получение `kubectl logs nginx-distroless-65cfd466bd-xkd7x-test` log-информации '"сбойного контейнера"':
+
+```output
+Defaulted container "nginx" out of: nginx, nginx-distroless-65cfd466bd-xkd7x-debugger
+127.0.0.1 - - [21/Jun/2024:22:48:00 +0800] "GET / HTTP/1.1" 200 612 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "-"
+127.0.0.1 - - [21/Jun/2024:22:48:01 +0800] "GET /favicon.ico HTTP/1.1" 404 555 "http://localhost:8081/" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "-"
+2024/06/21 22:48:01 [error] 13#13: *3 open() "/usr/share/nginx/html/favicon.ico" failed (2: No such file or directory), client: 127.0.0.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "localhost:8081", referrer: "http://localhost:8081/"
+
+```
+
+#### Задание с *
+
+```bash
+POD_NAME=$(kubectl get pods -l app=nginx -o jsonpath='{.items[0].metadata.name}')
+kubectl debug -it --attach=false --image=ubuntu ${POD_NAME} -c nginx-distroless-debugger --copy-to nginx-distroless-test --share-processes --tty=true
+kubectl attach -it -c nginx-distroless-debugger nginx-distroless-test
+```
+
+Если и внести изменения в сам Deployment, установить на работающиее приложение `securityContext`, это пересоздаст контейнеры - что уже **плохо**,
+
+```bash
+$ kubectl patch deployment nginx-distroless --patch '
+spec:
+  template:
+    spec:
+      shareProcessNamespace: true
+      containers:
+      - name: nginx
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add: ["SYS_PTRACE"]'
+```
+
+и посмотреть `kubectl get pods nginx-distroless-test -o yaml`
+
+у контейнера *kyos0109/nginx-distroless* - есть права,
+
+```bash
+  containers:
+  - image: kyos0109/nginx-distroless
+    imagePullPolicy: Always
+    name: nginx
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    resources:
+      limits:
+        cpu: "1"
+        memory: 512Mi
+      requests:
+        cpu: 500m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+        - SYS_PTRACE
+        - SYS_ADMIN
+
+```
+
+Но, данный контейнер без `shell` и утилит и ничего с ним сделать не получается, следовательно, как внести **securityContext** в контейнер `debug`, который создается к копии под приложения в команде `kubectl debug...`?
+
+А вот у `ubuntu` - нет этих _capabilities_:
+
+```yaml
+  - image: ubuntu
+    imagePullPolicy: Always
+    name: nginx-distroless-debugger
+    resources: {}
+    stdin: true
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    tty: true
+```
+
+Ведь **--copy-to=** создается только копию pod'а в который вносить изменения как в _deployment_ не получается, так же нет возможности сделать **--overrides=**, который есть у `kubectl run...`
+
+И при попытке получить доступ к _pid_'у _nginx_ - ошибка:
+
+```bash
+root@nginx-distroless-test:/# strace -p 7
+strace: attach: ptrace(PTRACE_SEIZE, 7): Operation not permitted
+```
+
+А вот ключ [`--profile=sysadmin`](https://github.com/kubernetes/enhancements/blob/master/keps/sig-cli/1441-kubectl-debug/README.md#profile-sysadmin) добавляет нам **privileged: true** к pod'у диангностики:
+
+```yaml
+  - image: ubuntu
+    imagePullPolicy: Always
+    name: nginx-distroless-debugger
+    resources: {}
+    securityContext:
+      privileged: true
+    stdin: true
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    tty: true
+```
+
+Таким образом, из `shell` получаем доступ к процессу копии pod'а _nginx.
+
+```bash
+root@nginx-distroless-test:/# strace -p 13 -f -yy
+strace: Process 13 attached
+epoll_wait(8<anon_inode:[eventpoll]>, 
+```
+
+В другой консоли запустим `curl -sL http://localhost:8081/`
+
+```bash
+[{events=EPOLLIN, data={u32=3491196944, u64=129793107914768}}], 512, -1) = 1
+accept4(6<TCP:[0.0.0.0:80]>, {sa_family=AF_INET, sin_port=htons(37238), sin_addr=inet_addr("127.0.0.1")}, [112 => 16], SOCK_NONBLOCK) = 3<TCP:[127.0.0.1:80->127.0.0.1:37238]>
+epoll_ctl(8<anon_inode:[eventpoll]>, EPOLL_CTL_ADD, 3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, {events=EPOLLIN|EPOLLRDHUP|EPOLLET, data={u32=3491197408, u64=129793107915232}}) = 0
+epoll_wait(8<anon_inode:[eventpoll]>, [{events=EPOLLIN, data={u32=3491197408, u64=129793107915232}}], 512, 60000) = 1
+recvfrom(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, "GET / HTTP/1.1\r\nHost: localhost:"..., 1024, 0, NULL, NULL) = 77
+stat("/usr/share/nginx/html/index.html", {st_mode=S_IFREG|0644, st_size=612, ...}) = 0
+openat(AT_FDCWD</>, "/usr/share/nginx/html/index.html", O_RDONLY|O_NONBLOCK) = 11</usr/share/nginx/html/index.html>
+fstat(11</usr/share/nginx/html/index.html>, {st_mode=S_IFREG|0644, st_size=612, ...}) = 0
+writev(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, [{iov_base="HTTP/1.1 200 OK\r\nServer: nginx/1"..., iov_len=238}], 1) = 238
+sendfile(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, 11</usr/share/nginx/html/index.html>, [0] => [612], 612) = 612
+write(5<pipe:[1552318]>, "127.0.0.1 - - [24/Jun/2024:20:21"..., 89) = 89
+close(11</usr/share/nginx/html/index.html>) = 0
+setsockopt(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, SOL_TCP, TCP_NODELAY, [1], 4) = 0
+epoll_wait(8<anon_inode:[eventpoll]>, [{events=EPOLLIN|EPOLLRDHUP, data={u32=3491197408, u64=129793107915232}}], 512, 65000) = 1
+recvfrom(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>, "", 1024, 0, NULL, NULL) = 0
+close(3<TCP:[127.0.0.1:80->127.0.0.1:37238]>) = 0
+epoll_wait(8<anon_inode:[eventpoll]>, ^Cstrace: Process 13 detached
+ <detached ...>
+
+```
 
 ---
 
